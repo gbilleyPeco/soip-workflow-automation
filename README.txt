@@ -12,8 +12,8 @@ the following tasks:
 ---------------------------------------------------------------------------------------------------
 The simplest way to run this process is to double-click the batch file named "RUN MODEL.bat".
 A black terminal window will pop up and you will see the code executing. Print statements will
-appear telling you what is happening. When the program is finished running, you will see 
-"Press any key to continue..." At this point, the process is complete and you can close the window!
+tell you what is happening. When the program is finished running, you will see "Press any key 
+to continue..." At this point, the process is complete and you can close the window!
 
 This method requires the following to be true:
 	1. The "user_inputs.py" and the SOIP Excel files have been updated.
