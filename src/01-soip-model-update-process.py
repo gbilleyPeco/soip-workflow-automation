@@ -28,6 +28,11 @@ import os
 import sys
 from optilogic import pioneer
 
+# Add project root to PATH to allow for relative imports. 
+ROOT = os.path.abspath(os.path.join('..'))
+if ROOT not in sys.path:
+    sys.path.append(ROOT)
+
 # Import SQL Statements
 from sql_statements import tbl_tab_Location_sql, lane_attributes_issues_sql, \
     transport_rates_hist_load_counts_sql, transport_rates_hist_costs_sql, transport_load_size_sql
@@ -36,7 +41,7 @@ from sql_statements import tbl_tab_Location_sql, lane_attributes_issues_sql, \
 from user_inputs import USER_NAME, APP_KEY, DB_NAME, SOIP_DEPOT_ASSIGNMENTS_FILENAME, \
     SOIP_OPT_ASSUMPTIONS_FILENAME
 
-######################## END USER INPUTS ########################
+
 
 
 #%% Pull Data from Cosmic Frog.
