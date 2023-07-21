@@ -11,3 +11,11 @@ DB_NAME = 'Testing - PECO 2023-08 SOIP Opt' # Opt Model Name
 # SOIP Excel File Information
 SOIP_DEPOT_ASSIGNMENTS_FILENAME = 'SOIP - Depot Assignments - July.xlsx'
 SOIP_OPT_ASSUMPTIONS_FILENAME = 'SOIP Optimization Assumptions - 20230620.xlsx'
+
+# User supplied notes in Cosmic Frog
+RepairCapacityNotes = 'Repair_Capacity'
+MinInventoryNotes = "MinInventory"
+DepotCapacityNotes = "Depot_Capacity"
+BeginningInvNotes = 'SOIP_BeginningInventory'
+ReturnsProductionNotes = 'Returns_SeptemberSOIP'
+CustomerDemandNotes = 'Issues_SeptemberSOIP'

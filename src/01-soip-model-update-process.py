@@ -39,12 +39,13 @@ from sql_statements import tbl_tab_Location_sql, lane_attributes_issues_sql, \
     
 # Import User-Input data.
 from user_inputs import USER_NAME, APP_KEY, DB_NAME, SOIP_DEPOT_ASSIGNMENTS_FILENAME, \
-    SOIP_OPT_ASSUMPTIONS_FILENAME
+    SOIP_OPT_ASSUMPTIONS_FILENAME, RepairCapacityNotes, MinInventoryNotes, DepotCapacityNotes, \
+    BeginningInvNotes, ReturnsProductionNotes, CustomerDemandNotes
 
 
 
 
-#%% Pull Data from Cosmic Frog.
+#%% Define functions to pull data.
 
 def pull_data_from_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, tables_we_want):
     # Note: This syntax is compatible with SQLAlchemy 2.0.
@@ -80,8 +81,6 @@ def pull_data_from_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, tables_we_want):
     
     return data_dict
 
-#%% Pull Data from Data Warehouse.
-
 def pull_data_from_data_warehouse(sql_name_dict):
     # Note: This syntax is compatible with SQLAlchemy 2.0.
     print("Pulling data from PECO's data warehouse...")
@@ -101,22 +100,6 @@ def pull_data_from_data_warehouse(sql_name_dict):
     
     return data_dict
 
-#%% Read data from SOIP Excel files.
-
-"""
-Tabs read from excel:
-    
-    SOIP Optimization Assumptions
-        - Depot Assumptions
-        - Renter Assumptions
-        - MultiSource List
-        - RenterDistSort Preferred Depot
-        
-    SOIP Depot Assignments
-        - Depot Assignments
-"""
-
-# Read data from Excel files.
 def pull_data_from_excel(filename_dict):
     print("Pulling data from Excel...")
     
@@ -161,5 +144,143 @@ filename_dict = {'Depot Assumptions':SOIP_OPT_ASSUMPTIONS_FILENAME,
                  'Depot Assignments':SOIP_DEPOT_ASSIGNMENTS_FILENAME}
 excel_data = pull_data_from_excel(filename_dict)
 
+#%% Update Cosmic Frog data.
+
+customerfulfillmentpolicies = cosmic_frog_data['customerfulfillmentpolicies']
+customers = cosmic_frog_data['customers']
+facilities = cosmic_frog_data['facilities']
+groups = cosmic_frog_data['groups']
+inventoryconstraints = cosmic_frog_data['inventoryconstraints']
+inventorypolicies = cosmic_frog_data['inventorypolicies']
+productionconstraints = cosmic_frog_data['productionconstraints']
+productionpolicies = cosmic_frog_data['productionpolicies']
+replenishmentpolicies = cosmic_frog_data['replenishmentpolicies']
+transportationpolicies = cosmic_frog_data['transportationpolicies']
+warehousingpolicies = cosmic_frog_data['warehousingpolicies']
+
+
+
+##### Update Customer Fulfillment Policies
+
+#010 - Depot Costs and Attributes v2
+
+#015 - Set SOIP Solve Flag
+
+#020 - Lane Attributes
+
+#030 - NPD Percentage Penalty
+
+#060 - Transportation Rates Historical
+
+#090 - Flag Multi-Source Options
+
+
+
+
+
+##### Update Customers
+
+#015 - Set SOIP Solve Flag
+
+#017 - Issue and Return Location Details
+
+#070 - Trans Load Size
+
+
+
+
+
+##### Update Facilities
+
+#010 - Depot Costs and Attributes v2
+
+#015 - Set SOIP Solve Flag
+
+#017 - Issue and Return Location Details
+
+#070 - Trans Load Size
+
+
+
+
+
+##### Update Groups
+
+#090 - Flag Multi-Source Options
+
+
+
+
+
+##### Update Inventory Constraints
+
+#010 - Depot Costs and Attributes v2
+
+
+
+
+
+##### Update Inventory Policies
+
+#010 - Depot Costs and Attributes v2
+
+
+
+
+
+##### Update Production Constraints
+
+#010 - Depot Costs and Attributes v2
+
+
+
+
+
+##### Update Production Policies
+
+#010 - Depot Costs and Attributes v2
+
+
+
+
+
+##### Update Replenishment Policies
+
+#010 - Depot Costs and Attributes v2
+
+#015 - Set SOIP Solve Flag
+
+#020 - Lane Attributes
+
+#060 - Transportation Rates Historical
+
+#090 - Flag Multi-Source Options
+
+#100 - Transfer Matrix Update
+
+#110 - Renter Dist Sort Pref Depot
+
+
+
+
+
+##### Update Transportation Policies
+
+#020 - Lane Attributes
+
+#060 - Transportation Rates Historical
+
+#070 - Trans Load Size
+
+
+
+
+
+##### Update Warehousing Policies
+
+#010 - Depot Costs and Attributes v2
+
+
+#%% Reupload data to Cosmic Frog.
 
 
