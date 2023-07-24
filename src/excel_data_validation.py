@@ -23,7 +23,7 @@ from user_inputs import USER_NAME, APP_KEY, DB_NAME, SOIP_DEPOT_ASSIGNMENTS_FILE
     
     
 def pull_data_from_excel(filename_dict):
-    print("Pulling data from Excel...")
+    print("\nPulling data from Excel...")
     
     # Create a dictionary to store the Excel data frames.
     data_dict = {}
