@@ -6,7 +6,7 @@
 # Cosmic Frog Account Data.
 USER_NAME = 'graham.billey'
 APP_KEY = 'op_NWQ3YjQ0NjktNTBjOC00M2JkLWE4NWEtNjM1NDBmODA5ODEw'
-DB_NAME = 'Testing - PECO 2023-08 SOIP Opt' # Opt Model Name
+DB_NAME = 'PECO 2023-08 SOIP Opt copy 1' # Opt Model Name
 
 # SOIP Excel File Information
 SOIP_DEPOT_ASSIGNMENTS_FILENAME = 'SOIP - Depot Assignments - July.xlsx'

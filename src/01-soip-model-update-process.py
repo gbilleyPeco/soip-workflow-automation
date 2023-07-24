@@ -23,6 +23,7 @@ tables back to the same Cosmis Frog optimization model.
 # Imports
 import sqlalchemy as sal
 import pandas as pd
+import numpy as np
 import warnings
 import os
 import sys
@@ -39,11 +40,8 @@ from sql_statements import tbl_tab_Location_sql, lane_attributes_issues_sql, \
     
 # Import User-Input data.
 from user_inputs import USER_NAME, APP_KEY, DB_NAME, SOIP_DEPOT_ASSIGNMENTS_FILENAME, \
-    SOIP_OPT_ASSUMPTIONS_FILENAME, RepairCapacityNotes, MinInventoryNotes, DepotCapacityNotes, \
-    BeginningInvNotes, ReturnsProductionNotes, CustomerDemandNotes
-
-
-
+    SOIP_OPT_ASSUMPTIONS_FILENAME #, RepairCapacityNotes, MinInventoryNotes, DepotCapacityNotes, \
+    #BeginningInvNotes, ReturnsProductionNotes, CustomerDemandNotes
 
 #%% Define functions to pull data.
 
@@ -57,7 +55,9 @@ def pull_data_from_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, tables_we_want):
         # Code that makes connection to the Cosmic Frog database.
         api = pioneer.Api(auth_legacy = False, un=USER_NAME, appkey=APP_KEY)
         connection_str = api.sql_connection_info(DB_NAME)
-        connection_string = 'postgresql://'+connection_str['raw']['user']+':'+connection_str['raw']['password']+'@'+connection_str['raw']['host']+':'+str(connection_str['raw']['port'])+'/'+connection_str['raw']['dbname']+'?sslmode=require'
+        connection_string = 'postgresql://'+connection_str['raw']['user']+':'+ \
+            connection_str['raw']['password']+'@'+connection_str['raw']['host']+':'+ \
+            str(connection_str['raw']['port'])+'/'+connection_str['raw']['dbname']+'?sslmode=require'
         engine = sal.create_engine(connection_string)
         insp = sal.inspect(engine)
     
@@ -144,6 +144,18 @@ filename_dict = {'Depot Assumptions':SOIP_OPT_ASSUMPTIONS_FILENAME,
                  'Depot Assignments':SOIP_DEPOT_ASSIGNMENTS_FILENAME}
 excel_data = pull_data_from_excel(filename_dict)
 
+#%% Format Excel data
+
+# Depot Assumptions. Set the first row to be the column names and drop that row.
+excel_data['Depot Assumptions'].columns = excel_data['Depot Assumptions'].loc[1]
+excel_data['Depot Assumptions'].drop([0,1], axis='index', inplace=True)
+excel_data['Depot Assumptions'].reset_index(drop=True, inplace=True)
+
+# Renter Assumptions. Set the third row to be the column names and drop rows 1-3.
+excel_data['Renter Assumptions'].columns = excel_data['Renter Assumptions'].loc[2]
+excel_data['Renter Assumptions'].drop([0,1,2], axis='index', inplace=True)
+excel_data['Renter Assumptions'].reset_index(drop=True, inplace=True)
+
 #%% Update Cosmic Frog data.
 
 customerfulfillmentpolicies = cosmic_frog_data['customerfulfillmentpolicies']
@@ -193,6 +205,38 @@ warehousingpolicies = cosmic_frog_data['warehousingpolicies']
 ##### Update Facilities
 
 #010 - Depot Costs and Attributes v2
+cols = ['ModelID', 'Type', 'Closed', 'Heat Treat', 'Fixed Upd']
+fac = excel_data['Depot Assumptions'][cols].copy()
+
+fac['fixedoperatingcost'] = fac['Fixed Upd'].fillna(0)
+fac['heat_treatment_rqmt'] = fac['Heat Treat'].fillna('N')
+fac['depottype'] = fac['Type']
+fac['closed'] = fac['Closed']
+
+def label_status(row):
+    if row['ModelID'][0] != 'D':
+        return np.nan
+    else:
+        return 'Include' if row['Closed'] == "NO" else 'Exclude'
+    
+fac['status'] = fac.apply(lambda row: label_status(row), axis=1)
+
+fac[fac.index.duplicated()]
+
+facilities_test = facilities.copy()
+
+fac.index = fac['ModelID']
+facilities_test.index = facilities_test['facilityname']
+
+facilities_test.update(fac)
+
+
+facilities_test_ = facilities_test[['fixedoperatingcost', 'heat_treatment_rqmt', 'depottype', 'closed']]
+fac_ = facilities[['fixedoperatingcost', 'heat_treatment_rqmt', 'depottype', 'closed']]
+
+
+
+
 
 #015 - Set SOIP Solve Flag
 
