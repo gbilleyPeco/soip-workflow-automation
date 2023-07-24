@@ -42,12 +42,15 @@ from sql_statements import tbl_tab_Location_sql, lane_attributes_issues_sql, \
 from user_inputs import USER_NAME, APP_KEY, DB_NAME, SOIP_DEPOT_ASSIGNMENTS_FILENAME, \
     SOIP_OPT_ASSUMPTIONS_FILENAME #, RepairCapacityNotes, MinInventoryNotes, DepotCapacityNotes, \
     #BeginningInvNotes, ReturnsProductionNotes, CustomerDemandNotes
+    
+# Import Excel IO function.
+from excel_data_validation import pull_data_from_excel
 
 #%% Define functions to pull data.
 
 def pull_data_from_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, tables_we_want):
     # Note: This syntax is compatible with SQLAlchemy 2.0.
-    print('Pulling data from Cosmic Frog...')
+    print('\nPulling data from Cosmic Frog...')
     
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")     # Ignore the Cosmic Frog API warning.
@@ -83,7 +86,7 @@ def pull_data_from_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, tables_we_want):
 
 def pull_data_from_data_warehouse(sql_name_dict):
     # Note: This syntax is compatible with SQLAlchemy 2.0.
-    print("Pulling data from PECO's data warehouse...")
+    print("\nPulling data from PECO's data warehouse...")
     connection_string = 'DRIVER={SQL Server};SERVER=10.0.17.62;;UID=tabconnection;PWD=password'
     connection_url = sal.engine.URL.create("mssql+pyodbc", query={"odbc_connect": connection_string})
     engine = sal.create_engine(connection_url)
@@ -99,18 +102,6 @@ def pull_data_from_data_warehouse(sql_name_dict):
             trans.commit()
     
     return data_dict
-
-def pull_data_from_excel(filename_dict):
-    print("Pulling data from Excel...")
-    
-    # Create a dictionary to store the Excel data frames.
-    data_dict = {}
-    
-    for sheetname, filename in filename_dict.items():
-        print(f'\tReading {sheetname} data from Excel.')
-        data_dict[sheetname] = pd.read_excel(os.path.join('..', 'data', filename), sheet_name=sheetname)
-        
-    return data_dict       
 
 #%% Pull Data
 
