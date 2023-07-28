@@ -4,7 +4,7 @@
 
 tbl_tab_Location_sql = 'select * from tbl_tab_Location;'
 
-lane_attributes_issues_sql = """
+nbr_of_depots_sql = """
 select a.movetype as movetype,
 	a.Customer as customer,
 	Count(a.Depot) as number_of_depots 
