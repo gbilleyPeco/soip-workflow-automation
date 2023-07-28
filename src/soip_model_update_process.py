@@ -38,7 +38,7 @@ if ROOT not in sys.path:
     sys.path.append(ROOT)
 
 # Import SQL Statements
-from sql_statements import tbl_tab_Location_sql, lane_attributes_issues_sql, \
+from sql_statements import tbl_tab_Location_sql, nbr_of_depots_sql, \
     transport_rates_hist_load_counts_sql, transport_rates_hist_costs_sql, transport_load_size_sql
     
 # Import User-Input data.
@@ -137,7 +137,7 @@ cosmic_frog_data = pull_data_from_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, table
 
 # Pull data from PECO's data warehouse.
 sql_name_dict = {'tbl_tab_Location':tbl_tab_Location_sql,
-                 'lane_attributes_issues':lane_attributes_issues_sql,
+                 'nbr_of_depots':nbr_of_depots_sql,
                  'transport_rates_hist_load_counts':transport_rates_hist_load_counts_sql,
                  'transport_rates_hist_costs':transport_rates_hist_costs_sql,
                  'transport_load_size':transport_load_size_sql}
@@ -178,7 +178,7 @@ warehousingpolicies_orig = cosmic_frog_data['warehousingpolicies'].copy()
 
 # Data Warehouse Data
 tbl_tab_Location = data_warehouse_data['tbl_tab_Location'].copy()
-lane_attributes_issues = data_warehouse_data['lane_attributes_issues'].copy()
+nbr_of_depots = data_warehouse_data['nbr_of_depots'].copy()
 transport_rates_hist_load_counts = data_warehouse_data['transport_rates_hist_load_counts'].copy()
 transport_rates_hist_costs = data_warehouse_data['transport_rates_hist_costs'].copy()
 transport_load_size = data_warehouse_data['transport_load_size'].copy()
@@ -186,13 +186,35 @@ transport_load_size = data_warehouse_data['transport_load_size'].copy()
 # NOTE: We will change this during development and compare to the unedited dataframes. 
 #       Remove this section after development is complete.
 tbl_tab_Location_orig = data_warehouse_data['tbl_tab_Location'].copy()
-lane_attributes_issues_orig = data_warehouse_data['lane_attributes_issues'].copy()
+nbr_of_depots_orig = data_warehouse_data['nbr_of_depots'].copy()
 transport_rates_hist_load_counts_orig = data_warehouse_data['transport_rates_hist_load_counts'].copy()
 transport_rates_hist_costs_orig = data_warehouse_data['transport_rates_hist_costs'].copy()
 transport_load_size_orig = data_warehouse_data['transport_load_size'].copy()
 
 
 #%%
+
+########################################## Number of Depots Subquery - (For 020-Lane Attributes)
+# uses nbr_of_depots
+nod = nbr_of_depots.copy()
+nod['ModelID'] = np.nan
+nod.set_index(['movetype', 'customer'], inplace=True)
+
+cus = customers[['customername', 'loccode']].copy()
+cus.rename(columns={'customername':'ModelID', 'loccode':'customer'}, inplace=True)
+cus['movetype'] = 'Issue'
+cus.set_index(['movetype', 'customer'], inplace=True)
+
+fac = facilities.loc[facilities['facilityname'].str.startswith('R_'),
+                     ['facilityname', 'loccode']].copy()
+fac.rename(columns={'facilityname':'ModelID', 'loccode':'customer'}, inplace=True)
+fac['movetype'] = 'Return'
+fac.set_index(['movetype', 'customer'], inplace=True)
+
+nod.update(cus)
+nod.update(fac)
+nod.reset_index(inplace=True)
+nod.dropna(inplace=True)
 
 ########################################## Update Customer Fulfillment Policies
 #010 - Depot Costs and Attributes v2
@@ -234,6 +256,64 @@ customerfulfillmentpolicies.update(cfp)
 customerfulfillmentpolicies.reset_index(inplace=True)
 
 #020 - Lane Attributes
+cols = ['customername', 'sourcename', 'soipplan', 'distance', 'greenfieldcandidate', 'cpudedicated']
+cfp = customerfulfillmentpolicies[cols].copy()
+cfp['distance'] = cfp['distance'].astype(float)
+
+cols = ['customername', 'country', 'georegion', 'pecoregion', 'pecosubregion', 'zone']
+cus = customers[cols].copy().add_suffix('_cust')
+
+cols = ['facilityname', 'country', 'depottype', 'georegion', 'pecoregion', 'pecosubregion', 'zone']
+fac = facilities[cols].copy().add_suffix('_depo')
+
+cols = ['customername', 'quantity']
+dem = customerdemand.loc[customerdemand['periodname'].str[-2:].astype(int) <= 12,
+                         cols]
+dem['quantity'] = dem['quantity'].astype(float)
+dem = dem.groupby('customername').mean()
+
+cfp = cfp.merge(cus, how='left', left_on='customername', right_on='customername_cust')
+cfp = cfp.merge(fac, how='left', left_on='sourcename', right_on='facilityname_depo')
+cfp = cfp.merge(dem, how='left', on='customername')
+cfp['quantity'].fillna(0, inplace=True)
+
+bins = [-np.inf,50,100,150,200,300,400,500,1000,1500,2000,np.inf]
+labs = ['LT0050','GT0050','GT0100','GT0150','GT0200','GT0300','GT0400','GT0500','GT1000','GT1500','GT2000']
+
+cfp['depottype'] = cfp['depottype_depo']
+cfp['oregion'] = cfp['georegion_depo']
+cfp['dregion'] = cfp['georegion_cust']
+cfp['ocountry'] = cfp['country_depo']
+cfp['dcountry'] = cfp['country_cust']
+cfp['ozone'] = cfp['zone_depo']
+cfp['dzone'] = cfp['zone_cust']
+cfp['opecoregion'] = cfp['pecoregion_depo']
+cfp['dpecoregion'] = cfp['pecoregion_cust']
+cfp['opecosubregion'] = cfp['pecosubregion_depo']
+cfp['dpecosubregion'] = cfp['pecosubregion_cust']
+cfp['mileageband'] = pd.cut(cfp['quantity'], bins, right=False, labels=labs)
+cfp['monthly_avg'] = cfp['quantity']
+cfp['monthlypalletband'] = cfp.apply(lambda row: 'LT3500' if row['quantity']<=3500 else 'GT3500', axis=1)
+
+cfp = cfp.merge(nod[['ModelID', 'number_of_depots']], how='left', left_on='customername', right_on='ModelID')
+cfp['number_of_depots_served'] = cfp['number_of_depots']
+cfp['nbrdepotsband'] = cfp.apply(lambda row: 'LT01' if row['number_of_depots'] <= 1 else 'GT01', axis=1)
+
+def add_to_model(row):
+    if (row['soipplan'] == 'N' and 
+        row['distance'] <= 1000 and
+        row['greenfieldcandidate'] == 'Y' and
+        row['cpudedicated'] is None and
+        (row['monthly_avg'] <= 3500 or row['number_of_depots'] >= 2)
+        ):
+        return 'Y'
+    else:
+        return 'N'
+cfp['addtomodel'] = cfp.apply(add_to_model, axis=1)
+
+add_yes = cfp[cfp['addtomodel']=='Y']
+add_no = cfp[cfp['addtomodel']=='N']
+
 
 #030 - NPD Percentage Penalty
 
@@ -361,8 +441,6 @@ returners_cf.set_index(index_cols, inplace=True)
 facilities.set_index(index_cols, inplace=True)
 facilities.update(returners_cf)
 facilities.reset_index(inplace=True)
-
-
 
 #070 - Trans Load Size
 
@@ -523,8 +601,31 @@ replenishmentpolicies.loc[replenishmentpolicies['notes']=='Baseline_Returns'].sh
 
 
 ########################################## Update Transportation Policies
-
 #020 - Lane Attributes
+cols = ['originname', 'destinationname']
+ts = transportationpolicies[cols].copy()
+
+cols = ['facilityname', 'country', 'loccode']
+fac = facilities[cols]
+
+ts = ts.merge(fac.add_suffix('_orig'), how='left', left_on='originname', right_on='facilityname_orig')
+ts = ts.merge(fac.add_suffix('_dest'), how='left', left_on='destinationname', right_on='facilityname_dest')
+
+ts['ocountry'] = ts['country_orig']
+ts['dcountry'] = ts['country_dest']
+ts['oloccode'] = ts['loccode_orig']
+ts['dloccode'] = ts['loccode_dest']
+
+index_cols = ['originname', 'destinationname']
+ts.set_index(index_cols, inplace=True)
+transportationpolicies.set_index(index_cols, inplace=True)
+transportationpolicies.update(ts)
+transportationpolicies.reset_index(inplace=True)
+
+
+
+
+
 
 #060 - Transportation Rates Historical
 
