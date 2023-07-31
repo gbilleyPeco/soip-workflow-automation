@@ -314,6 +314,9 @@ cfp['addtomodel'] = cfp.apply(add_to_model, axis=1)
 add_yes = cfp[cfp['addtomodel']=='Y']
 add_no = cfp[cfp['addtomodel']=='N']
 
+# Closest Depot Identifier
+
+
 
 #030 - NPD Percentage Penalty
 
