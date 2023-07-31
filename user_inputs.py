@@ -20,3 +20,4 @@ BeginningInvNotes = 'SOIP_BeginningInventory'
 ReturnsProductionNotes = 'Returns_SOIP'
 CustomerDemandNotes = 'Issues_SeptemberSOIP'
 ProductionPolicyRepairBOMName = 'BOM_RFU_REPAIR'
+NewPalletCost = 25
