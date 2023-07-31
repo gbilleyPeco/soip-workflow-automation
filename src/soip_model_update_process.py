@@ -28,6 +28,7 @@ import warnings
 import os
 import sys
 from optilogic import pioneer
+from collections import defaultdict
 
 # Set display format for pandas.
 pd.options.display.float_format = "{:,.2f}".format
@@ -268,7 +269,7 @@ fac = facilities[cols].copy().add_suffix('_depo')
 
 cols = ['customername', 'quantity']
 dem = customerdemand.loc[customerdemand['periodname'].str[-2:].astype(int) <= 12,
-                         cols]
+                         cols].copy()
 dem['quantity'] = dem['quantity'].astype(float)
 dem = dem.groupby('customername').mean()
 
@@ -311,11 +312,22 @@ def add_to_model(row):
         return 'N'
 cfp['addtomodel'] = cfp.apply(add_to_model, axis=1)
 
-add_yes = cfp[cfp['addtomodel']=='Y']
-add_no = cfp[cfp['addtomodel']=='N']
-
 # Closest Depot Identifier
+cfp = cfp.merge(facilities[['facilityname', 'status']], how='left', left_on='sourcename', right_on='facilityname')
+cfp.rename(columns={'status':'DepotStatus'}, inplace=True)
 
+closest_depot = cfp[(cfp['DepotStatus']=='Include') & (cfp['depottype'].isin(['Full Service', 'Sort Only']))].copy()
+closest_depot = closest_depot.sort_values(['distance', 'depottype', 'sourcename']).groupby('customername').head(1)
+closest_depot = closest_depot[['sourcename', 'customername']]
+closest_depot['closestdepot'] = 'Y'
+cfp = cfp.merge(closest_depot, how='left', on=['sourcename', 'customername'])
+cfp['closestdepot'].fillna('N', inplace=True)
+
+index_cols = ['customername', 'sourcename']
+cfp.set_index(index_cols, inplace=True)
+customerfulfillmentpolicies.set_index(index_cols, inplace=True)
+customerfulfillmentpolicies.update(cfp)
+customerfulfillmentpolicies.reset_index(inplace=True)
 
 
 #030 - NPD Percentage Penalty
@@ -590,6 +602,78 @@ replenishmentpolicies.reset_index(inplace=True)
 replenishmentpolicies.loc[replenishmentpolicies['notes']=='Baseline_Returns'].shape
 
 #020 - Lane Attributes
+cols = ['facilityname', 'productname', 'sourcename', 'soipplan', 'distance', 'greenfieldcandidate', 'cpudedicated']
+rps = replenishmentpolicies[cols].copy()
+rps['distance'] = rps['distance'].astype(float)
+
+cols = ['facilityname', 'country', 'depottype', 'georegion', 'pecoregion', 'pecosubregion', 'zone']
+org = facilities[cols].copy().add_suffix('_orig')
+dst = facilities[cols].copy().add_suffix('_dest')
+
+cols = ['facilityname', 'constraintvalue']
+fst = productionconstraints.loc[(productionconstraints['periodname'].str[-2:].astype(int) <= 12) & 
+                                (productionconstraints['notes'] == ReturnsProductionNotes),
+                                cols].copy()
+fst['constraintvalue'] = fst['constraintvalue'].astype(float)
+fst = fst.groupby('facilityname').mean()
+
+rps = rps.merge(org, how='left', left_on='sourcename', right_on='facilityname_orig')
+rps = rps.merge(dst, how='left', left_on='facilityname', right_on='facilityname_dest')
+rps = rps.merge(fst, how='left', left_on='sourcename', right_on='facilityname')
+
+bins = [-np.inf,50,100,150,200,300,400,500,1000,1500,2000,np.inf]
+labs = ['LT0050','GT0050','GT0100','GT0150','GT0200','GT0300','GT0400','GT0500','GT1000','GT1500','GT2000']
+
+rps['odepottype'] = rps['depottype_orig']
+rps['ddepottype'] = rps['depottype_dest']
+rps['ocountry'] = rps['country_orig']
+rps['dcountry'] = rps['country_dest']
+rps['oregion'] = rps['georegion_orig']
+rps['dregion'] = rps['georegion_dest']
+rps['opecoregion'] = rps['pecoregion_orig']
+rps['dpecoregion'] = rps['pecoregion_dest']
+rps['opecosubregion'] = rps['pecosubregion_orig']
+rps['dpecosubregion'] = rps['pecosubregion_dest']
+rps['mileageband'] = pd.cut(rps['constraintvalue'], bins, right=False, labels=labs)
+rps['monthly_avg'] = rps['constraintvalue']
+rps['monthlypalletband'] = rps.apply(lambda row: 'LT3500' if row['constraintvalue']<=3500 else 'GT3500', axis=1)
+
+rps = rps.merge(nod[['ModelID', 'number_of_depots']], how='left', left_on='sourcename', right_on='ModelID')
+rps['number_of_depots_served'] = rps['number_of_depots']
+rps['nbrdepotsband'] = rps.apply(lambda row: 'LT01' if row['number_of_depots'] <= 1 else 'GT01', axis=1)
+
+def add_to_model(row):
+    if (row['sourcename'].startswith('R_') and
+        row['soipplan'] == 'N' and 
+        row['distance'] <= 1000 and
+        row['greenfieldcandidate'] == 'Y' and
+        row['cpudedicated'] is None and
+        (row['monthly_avg'] <= 3500 or row['number_of_depots'] >= 2)
+        ):
+        return 'Y'
+    else:
+        return 'N'
+rps['addtomodel'] = rps.apply(add_to_model, axis=1)
+
+# Closest depot identifier.
+rps = rps.merge(facilities[['facilityname', 'status']], how='left', on='facilityname')
+rps.rename(columns={'status':'DepotStatus'}, inplace=True)
+
+closest_depot = rps[(rps['DepotStatus']=='Include') & 
+                    (rps['ddepottype'].isin(['Full Service', 'Sort Only'])) &
+                    (rps['sourcename'].str.startswith('R'))].copy()
+closest_depot = closest_depot.sort_values(['distance', 'ddepottype', 'facilityname']).groupby('sourcename').head(1)
+closest_depot = closest_depot[['facilityname', 'sourcename']]
+closest_depot['closestdepot'] = 'Y'
+rps = rps.merge(closest_depot, how='left', on=['facilityname', 'sourcename'])
+rps['closestdepot'].fillna('N', inplace=True)
+
+index_cols = ['facilityname', 'sourcename']
+rps.set_index(index_cols, inplace=True)
+replenishmentpolicies.set_index(index_cols, inplace=True)
+replenishmentpolicies.update(rps)
+replenishmentpolicies.reset_index(inplace=True)
+
 
 #060 - Transportation Rates Historical
 
@@ -598,6 +682,7 @@ replenishmentpolicies.loc[replenishmentpolicies['notes']=='Baseline_Returns'].sh
 #100 - Transfer Matrix Update
 
 #110 - Renter Dist Sort Pref Depot
+
 
 
 
