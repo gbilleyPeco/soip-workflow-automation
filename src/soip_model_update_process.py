@@ -45,7 +45,7 @@ from sql_statements import tbl_tab_Location_sql, nbr_of_depots_sql, \
 # Import User-Input data.
 from user_inputs import USER_NAME, APP_KEY, DB_NAME, RepairCapacityNotes, MinInventoryNotes, \
     DepotCapacityNotes, BeginningInvNotes, ReturnsProductionNotes, CustomerDemandNotes, \
-    ProductionPolicyRepairBOMName
+    ProductionPolicyRepairBOMName, NewPalletCost
     
 # Import Excel IO function.
 from excel_data_validation import pull_data_from_excel
@@ -329,8 +329,19 @@ customerfulfillmentpolicies.set_index(index_cols, inplace=True)
 customerfulfillmentpolicies.update(cfp)
 customerfulfillmentpolicies.reset_index(inplace=True)
 
-
 #030 - NPD Percentage Penalty
+cols = ['ModelID', 'NPD %']
+cfp = excel_data['Renter Assumptions'][cols].copy().drop_duplicates()
+cfp['customername'] = cfp['ModelID']
+cfp['depottype'] = 'Manufacturing'
+cfp['unitcost'] = (cfp['NPD %']*NewPalletCost).fillna(0)
+
+index_cols = ['customername', 'depottype']
+cfp.set_index(index_cols, inplace=True)
+customerfulfillmentpolicies.set_index(index_cols, inplace=True)
+customerfulfillmentpolicies.update(cfp)
+customerfulfillmentpolicies.reset_index(inplace=True)
+
 
 #060 - Transportation Rates Historical
 
@@ -680,6 +691,55 @@ replenishmentpolicies.reset_index(inplace=True)
 #090 - Flag Multi-Source Options
 
 #100 - Transfer Matrix Update
+cols = ['facilityname', 'sourcename', 'odepottype', 'ddepottype', 'status']
+rps = replenishmentpolicies[cols].copy()
+
+transfers = rps[rps['sourcename'].str.startswith('D') & rps['facilityname'].str.startswith('D')].index
+rps.drop(transfers, inplace=True)
+
+rps['status'] = 'Include'
+
+# mfg_lanes
+rps.loc[(rps['odepottype']=='Manufacturing') & 
+        (rps['ddepottype'].isin(['Manufacturing', 'DO NOT USE', 'Distributor Sort', 
+                                 'Renter Sort', 'Repair Only', 'Sort Only'])),
+        'status'] = 'Exclude'
+
+# fsd_lanes
+rps.loc[(rps['odepottype']=='Full Service') & 
+        rps['ddepottype'].isin(['Manufacturing', 'DO NOT USE']),
+        'status'] = 'Exclude'
+
+# srt_lanes
+rps.loc[(rps['odepottype']=='Sort Only') & 
+        rps['ddepottype'].isin(['Manufacturing', 'DO NOT USE', 'Sort Only']),
+        'status'] = 'Exclude'
+
+# sto_lanes
+rps.loc[(rps['odepottype']=='Storage') & 
+        rps['ddepottype'].isin(['Manufacturing', 'DO NOT USE', 
+                                'Distributor Sort', 'Renter Sort', 'Storage']),
+        'status'] = 'Exclude'
+
+# rep_lanes
+rps.loc[(rps['odepottype']=='Repair Only') & 
+        rps['ddepottype'].isin(['Manufacturing', 'DO NOT USE', 'Distributor Sort', 'Renter Sort']),
+        'status'] = 'Exclude'
+
+# dnu_lanes
+rps.loc[rps['odepottype']=='DO NOT USE', 'status'] = 'Exclude'
+
+# drs_lanes
+rps.loc[rps['odepottype'].isin(['Distributor Sort', 'Renter Sort']) & 
+        (rps['ddepottype'] != "Full Service"),
+        'status'] = 'Exclude'
+
+index_cols = ['facilityname', 'sourcename']
+rps.set_index(index_cols, inplace=True)
+replenishmentpolicies.set_index(index_cols, inplace=True)
+replenishmentpolicies.update(rps)
+replenishmentpolicies.reset_index(inplace=True)
+
 
 #110 - Renter Dist Sort Pref Depot
 
