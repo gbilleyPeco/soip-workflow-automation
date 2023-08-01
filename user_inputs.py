@@ -12,7 +12,7 @@ DB_NAME = 'PECO 2023-08 SOIP Opt copy 1' # Opt Model Name
 SOIP_DEPOT_ASSIGNMENTS_FILENAME = 'SOIP - Depot Assignments - TESTING.xlsx'
 SOIP_OPT_ASSUMPTIONS_FILENAME = 'SOIP Optimization Assumptions - TESTING.xlsx'
 
-# User supplied notes in Cosmic Frog
+# User supplied notes in Cosmic Frog.
 RepairCapacityNotes = 'Repair_Capacity'
 MinInventoryNotes = "MinInventory"
 DepotCapacityNotes = "Depot_Capacity"
@@ -20,4 +20,8 @@ BeginningInvNotes = 'SOIP_BeginningInventory'
 ReturnsProductionNotes = 'Returns_SOIP'
 CustomerDemandNotes = 'Issues_SeptemberSOIP'
 ProductionPolicyRepairBOMName = 'BOM_RFU_REPAIR'
+
 NewPalletCost = 25
+Avg_Load_Size_Issues = 521
+Avg_Load_Size_Returns = 487
+Avg_Load_Size_Transfers = 560
