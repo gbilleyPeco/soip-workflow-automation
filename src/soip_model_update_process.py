@@ -45,7 +45,8 @@ from sql_statements import tbl_tab_Location_sql, nbr_of_depots_sql, \
 # Import User-Input data.
 from user_inputs import USER_NAME, APP_KEY, DB_NAME, RepairCapacityNotes, MinInventoryNotes, \
     DepotCapacityNotes, BeginningInvNotes, ReturnsProductionNotes, CustomerDemandNotes, \
-    ProductionPolicyRepairBOMName, NewPalletCost
+    ProductionPolicyRepairBOMName, NewPalletCost, Avg_Load_Size_Issues, Avg_Load_Size_Returns, \
+    Avg_Load_Size_Transfers
     
 # Import Excel IO function.
 from excel_data_validation import pull_data_from_excel
@@ -216,6 +217,24 @@ nod.update(cus)
 nod.update(fac)
 nod.reset_index(inplace=True)
 nod.dropna(inplace=True)
+
+########################################## Transport Load Size Query - (For 070-Trans Load Size)
+iss = transport_load_size[transport_load_size['movetype']=='Issue'].copy()
+oth = transport_load_size[transport_load_size['movetype']!='Issue'].copy()
+iss = iss.merge(customers[['loccode', 'customername']], how='left', left_on='customer_Loc_Code', right_on='loccode')
+oth = oth.merge(facilities[['loccode', 'facilityname']], how='left', left_on='customer_Loc_Code', right_on='loccode')
+iss.rename(columns={'customername':'ModelID'}, inplace=True)
+oth.rename(columns={'facilityname':'ModelID'}, inplace=True)
+
+tls = pd.concat([iss, oth])
+tls['originname'] = tls.apply(lambda row: row['ModelID'] if row['movetype'] == 'Return' else None, axis=1)
+tls['destinationname'] = tls.apply(lambda row: row['ModelID'] if row['movetype'] == 'Issue' else None, axis=1)
+
+# tls[tls['ModelID'].isna()].groupby('movetype').size()
+# NOTE: 298 Rows where ModelID is blank... 28 issue locations and 275 return locations are receiving
+# or returning pallets and are not in the model.
+
+
 
 ########################################## Update Customer Fulfillment Policies
 #010 - Depot Costs and Attributes v2
@@ -742,42 +761,102 @@ replenishmentpolicies.reset_index(inplace=True)
 
 
 #110 - Renter Dist Sort Pref Depot
+cols = ['Ocode', 'Dcode']
+rps = excel_data['RenterDistSort Preferred Depot'][cols]
+o_d = rps.rename(columns={'Ocode':'facilityname', 'Dcode':'sourcename'}).copy()
+d_o = rps.rename(columns={'Ocode':'sourcename', 'Dcode':'facilityname'}).copy()
+rps = pd.concat([o_d, d_o]).drop_duplicates()
+rps['rentdistsortprefassig'] = 'Y'
 
+replenishmentpolicies['rentdistsortprefassig'] = 'N'
 
-
-
+index_cols = ['facilityname', 'sourcename', 'rentdistsortprefassig']
+rps.set_index(index_cols, inplace=True)
+replenishmentpolicies.set_index(index_cols, inplace=True)
+replenishmentpolicies.update(rps)
+replenishmentpolicies.reset_index(inplace=True)
 
 
 ########################################## Update Transportation Policies
 #020 - Lane Attributes
 cols = ['originname', 'destinationname']
-ts = transportationpolicies[cols].copy()
+tps = transportationpolicies[cols].copy()
 
 cols = ['facilityname', 'country', 'loccode']
 fac = facilities[cols]
 
-ts = ts.merge(fac.add_suffix('_orig'), how='left', left_on='originname', right_on='facilityname_orig')
-ts = ts.merge(fac.add_suffix('_dest'), how='left', left_on='destinationname', right_on='facilityname_dest')
+tps = tps.merge(fac.add_suffix('_orig'), how='left', left_on='originname', right_on='facilityname_orig')
+tps = tps.merge(fac.add_suffix('_dest'), how='left', left_on='destinationname', right_on='facilityname_dest')
 
-ts['ocountry'] = ts['country_orig']
-ts['dcountry'] = ts['country_dest']
-ts['oloccode'] = ts['loccode_orig']
-ts['dloccode'] = ts['loccode_dest']
+tps['ocountry'] = tps['country_orig']
+tps['dcountry'] = tps['country_dest']
+tps['oloccode'] = tps['loccode_orig']
+tps['dloccode'] = tps['loccode_dest']
 
 index_cols = ['originname', 'destinationname']
-ts.set_index(index_cols, inplace=True)
+tps.set_index(index_cols, inplace=True)
 transportationpolicies.set_index(index_cols, inplace=True)
-transportationpolicies.update(ts)
+transportationpolicies.update(tps)
 transportationpolicies.reset_index(inplace=True)
-
-
-
-
-
 
 #060 - Transportation Rates Historical
 
 #070 - Trans Load Size
+cols = ['originname', 'destinationname', 'productname', 'modename']
+tps = transportationpolicies[cols].dropna(subset=['originname', 'destinationname']).copy()
+
+choices = ['Issue', 'Return']
+conditions = [tps['destinationname'].str.startswith('I_'),
+              tps['originname'].str.startswith('R_')]
+tps['movetype'] = np.select(conditions, choices, default='Transfer')
+tps['ModelID'] = np.where(tps['movetype']=='Issue', tps['destinationname'], tps['originname'])
+
+tps = tps.merge(tls[['ModelID', 'Average_Cube']], how='left', on='ModelID')
+
+tps.loc[tps['movetype']=='Issue', 'Average_Cube'].fillna(Avg_Load_Size_Issues, inplace=True)
+
+
+
+tps.loc[tps['movetype']=='Issue', 'Average_Cube']
+
+
+help(np.choose)
+
+
+
+
+
+
+
+# example - Going to try and rework this since it's done in a fairly confusing way.
+t_ret = tps[tps['originname'].str.startswith('R')].head(500)
+t_iss = tps[tps['destinationname'].str.startswith('I')].head(500)
+t = pd.concat([t_iss, t_ret]).copy()
+
+t = t.merge(tls[['originname', 'Average_Cube']], how='left', on='originname')
+t = t.merge(tls[['destinationname', 'Average_Cube']], how='left', on='destinationname', suffixes=('_returns', '_issues'))
+
+t['Average_Cube'] = t[['Average_Cube_returns', 'Average_Cube_issues']].bfill(axis=1).iloc[:,0]
+
+t[~t['Average_Cube_returns'].isna() & ~t['Average_Cube_issues'].isna()]
+
+t[~t['Average_Cube_issues'].isna()].iloc[0]
+
+
+# Testing
+
+df1 = pd.DataFrame({'name':['a', 'b', 'c', 'd', 'e'],
+                    'value':[1,2,3,4,5]})
+df2 = pd.DataFrame({'name':['a','b','g', 'c'],
+                    'v1':[9,8,7,6]})
+
+df3 = pd.DataFrame({'name':['a','b','c','d','e','f','g']})
+
+df3 = df3.merge(df1, how='left', on='name')
+df3 = df3.merge(df2, how='left', on='name')
+df3['new_value'] = df3[['value', 'v1']].bfill(axis=1)
+df3[['value', 'v1']].bfill(axis=1).iloc[:,0]   # Coalesce
+
 
 
 
@@ -821,6 +900,7 @@ warehousingpolicies.reset_index(inplace=True)
 # =============================================================================
 
 #%% Reupload data to Cosmic Frog.
+
 
 
 
