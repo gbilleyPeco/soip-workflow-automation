@@ -230,6 +230,9 @@ tls = pd.concat([iss, oth])
 tls['originname'] = tls.apply(lambda row: row['ModelID'] if row['movetype'] == 'Return' else None, axis=1)
 tls['destinationname'] = tls.apply(lambda row: row['ModelID'] if row['movetype'] == 'Issue' else None, axis=1)
 
+# Testing
+#tls['Average_Cube'] = 10000
+
 # tls[tls['ModelID'].isna()].groupby('movetype').size()
 # NOTE: 298 Rows where ModelID is blank... 28 issue locations and 275 return locations are receiving
 # or returning pallets and are not in the model.
@@ -414,9 +417,18 @@ customers.reset_index(inplace=True)
 
 
 #070 - Trans Load Size
+cs = tls.loc[tls['movetype']=='Issue',['destinationname', 'Average_Cube']].copy()
+cs.rename(columns={'destinationname':'customername'}, inplace=True)
 
+cus = customers['customername'].copy().to_frame().drop_duplicates()
+cus = cus.merge(cs, how='left', on='customername')
+cus['avgloadsz'] = cus['Average_Cube'].fillna(Avg_Load_Size_Issues)
 
-
+index_cols = ['customername']
+cus.set_index(index_cols, inplace=True)
+customers.set_index(index_cols, inplace=True)
+customers.update(cus)
+customers.reset_index(inplace=True)
 
 
 ########################################## Update Facilities
@@ -488,9 +500,21 @@ facilities.update(returners_cf)
 facilities.reset_index(inplace=True)
 
 #070 - Trans Load Size
+fs = tls.loc[tls['movetype']=='Return',['originname', 'Average_Cube']].copy()
+fs.rename(columns={'originname':'facilityname'}, inplace=True)
 
+fac = facilities['facilityname'].copy().to_frame().drop_duplicates()
+fac = fac.merge(fs, how='left', on='facilityname')
 
+fac.loc[fac['facilityname'].str.startswith('R_'), 'defaultloadsz'] = Avg_Load_Size_Returns
+fac.loc[fac['facilityname'].str.startswith('D_'), 'defaultloadsz'] = Avg_Load_Size_Transfers
+fac['avgloadsz'] = fac[['Average_Cube', 'defaultloadsz']].bfill(axis=1).iloc[:,0]
 
+index_cols = ['facilityname']
+fac.set_index(index_cols, inplace=True)
+facilities.set_index(index_cols, inplace=True)
+facilities.update(fac)
+facilities.reset_index(inplace=True)
 
 
 ########################################## Update Groups
@@ -809,57 +833,29 @@ choices = ['Issue', 'Return']
 conditions = [tps['destinationname'].str.startswith('I_'),
               tps['originname'].str.startswith('R_')]
 tps['movetype'] = np.select(conditions, choices, default='Transfer')
-tps['ModelID'] = np.where(tps['movetype']=='Issue', tps['destinationname'], tps['originname'])
 
-tps = tps.merge(tls[['ModelID', 'Average_Cube']], how='left', on='ModelID')
+issues    = tps[tps['movetype']=='Issue'].copy()
+returns   = tps[tps['movetype']=='Return'].copy()
+transfers = tps[tps['movetype']=='Transfer'].copy()
 
-tps.loc[tps['movetype']=='Issue', 'Average_Cube'].fillna(Avg_Load_Size_Issues, inplace=True)
+issues = issues.merge(tls[['movetype', 'destinationname', 'Average_Cube']], how='left', 
+                      on=['movetype', 'destinationname'])
+issues['averageshipmentsize'] = issues['Average_Cube'].fillna(Avg_Load_Size_Issues)
 
+returns = returns.merge(tls[['movetype', 'originname', 'Average_Cube']], how='left', 
+                        on=['movetype', 'originname'])
+returns['averageshipmentsize'] = returns['Average_Cube'].fillna(Avg_Load_Size_Returns)
 
+transfers['averageshipmentsize'] = Avg_Load_Size_Transfers
 
-tps.loc[tps['movetype']=='Issue', 'Average_Cube']
+tps = pd.concat([issues, returns, transfers])
 
-
-help(np.choose)
-
-
-
-
-
-
-
-# example - Going to try and rework this since it's done in a fairly confusing way.
-t_ret = tps[tps['originname'].str.startswith('R')].head(500)
-t_iss = tps[tps['destinationname'].str.startswith('I')].head(500)
-t = pd.concat([t_iss, t_ret]).copy()
-
-t = t.merge(tls[['originname', 'Average_Cube']], how='left', on='originname')
-t = t.merge(tls[['destinationname', 'Average_Cube']], how='left', on='destinationname', suffixes=('_returns', '_issues'))
-
-t['Average_Cube'] = t[['Average_Cube_returns', 'Average_Cube_issues']].bfill(axis=1).iloc[:,0]
-
-t[~t['Average_Cube_returns'].isna() & ~t['Average_Cube_issues'].isna()]
-
-t[~t['Average_Cube_issues'].isna()].iloc[0]
-
-
-# Testing
-
-df1 = pd.DataFrame({'name':['a', 'b', 'c', 'd', 'e'],
-                    'value':[1,2,3,4,5]})
-df2 = pd.DataFrame({'name':['a','b','g', 'c'],
-                    'v1':[9,8,7,6]})
-
-df3 = pd.DataFrame({'name':['a','b','c','d','e','f','g']})
-
-df3 = df3.merge(df1, how='left', on='name')
-df3 = df3.merge(df2, how='left', on='name')
-df3['new_value'] = df3[['value', 'v1']].bfill(axis=1)
-df3[['value', 'v1']].bfill(axis=1).iloc[:,0]   # Coalesce
-
-
-
-
+index_cols = ['originname', 'destinationname', 'productname', 'modename']
+tps.set_index(index_cols, inplace=True)
+tps = tps[~tps.index.duplicated()]
+transportationpolicies.set_index(index_cols, inplace=True)
+transportationpolicies.update(tps)
+transportationpolicies.reset_index(inplace=True)
 
 
 ########################################## Update Warehousing Policies
