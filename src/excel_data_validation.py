@@ -4,6 +4,7 @@
 # =============================================================================
 
 import pandas as pd
+import numpy as np
 import os
 import sys
 
@@ -72,6 +73,31 @@ def check_for_missing_values(filename, sheetname, df, nonempty_cols):
         
     return error
 
+def check_for_only_allowed_values(filename, sheetname, df, allowed_vals):
+# =============================================================================
+# This function is called by pull_data_from_excel() and is one of the main validation
+# functions. 
+# Returns 0 if no errors, > 0 if errors.
+# =============================================================================
+    error = 0
+    
+    if allowed_vals is None:
+        return error
+    
+    # For each column specified in the disallowed_val dictionary...
+    for col in allowed_vals.keys():
+        allowed = allowed_vals[col]
+        actual  = df[col]
+        
+        disallowed_values = [actual_item for actual_item in actual if actual_item not in allowed]
+        
+        if len(disallowed_values) > 0:
+            error += 1
+            print(f"Values that are not allowed found in:\n'{filename}', '{sheetname}' tab.\nColumn '{col}'.\n{disallowed_values}\n\n")
+
+    return error
+
+
 
 def pull_data_from_excel():
 # =============================================================================
@@ -99,7 +125,8 @@ def pull_data_from_excel():
                              'key_cols' : ['ModelID'],
                              'loc_attributes' : [['ModelID', 'LocCode', 'Loc Description']],
                              'nonempty_cols' : ['ModelID', 'LocCode', 'Loc Description',
-                                                'Type', 'Closed']
+                                                'Type', 'Closed'],
+                             'allowed_vals' : None
                              },
                   
         'Renter Assumptions':{'filename' : SOIP_OPT_ASSUMPTIONS_FILENAME, 
@@ -108,7 +135,8 @@ def pull_data_from_excel():
                               'loc_attributes' : [['Loc Code', 'ModelID', 'Loc Desc']],
                               'nonempty_cols' : ['Loc Code', 'ModelID', 'Loc Desc', 'Postal', 'City',
                                                  'State', 'Country',
-                                                 'Corp Name', 'Corp Code']
+                                                 'Corp Name', 'Corp Code'],
+                              'allowed_vals' : None
                               },
                   
         'MultiSource List':{'filename' : SOIP_OPT_ASSUMPTIONS_FILENAME,
@@ -119,7 +147,9 @@ def pull_data_from_excel():
                             'nonempty_cols' : ['MoveType', 'CustomerCode', 'CustName', 'Cust Zone',
                                                'Cust Region', 'DepotCode', 'DepotName', 'Depot Type',
                                                'Total', 'Pct of Location Volume', 'NbrDepots',
-                                               'OK to Include SOIP']
+                                               'OK to Include SOIP'],
+                            'allowed_vals' : {'OK to Include SOIP': ['YES', 'Yes', 'yes', 'Y', 'y',
+                                                                     'NO', 'N', 'no', 'n']}
                             },
                   
         'RenterDistSort Preferred Depot':{'filename' : SOIP_OPT_ASSUMPTIONS_FILENAME,
@@ -128,7 +158,8 @@ def pull_data_from_excel():
                                           'loc_attributes' : [['Ocode','O-Name'],
                                                               ['Dcode','D-Name']],
                                           'nonempty_cols' : ['Ocode', 'O-Name', 'Dcode', 'D-Name',
-                                                             'Last 90 Days # Loads', 'Trans Comments (Y/N)']
+                                                             'Last 90 Days # Loads', 'Trans Comments (Y/N)'],
+                                          'allowed_vals' : None
                                           },
                   
         'Depot Assignments':{'filename' : SOIP_DEPOT_ASSIGNMENTS_FILENAME,
@@ -137,7 +168,8 @@ def pull_data_from_excel():
                              'loc_attributes' : [['Loc Code', 'Location Name'],
                                                  ['Default Depot Code', 'Default Depot Name']],
                              'nonempty_cols' : ['MoveType', 'Loc Code', 'Location Name', 'Default Depot Code',
-                                                'Default Depot Name']
+                                                'Default Depot Name'],
+                             'allowed_vals' : None
                              }
         }
         
@@ -161,6 +193,7 @@ def pull_data_from_excel():
         key_cols  = info['key_cols']
         loc_attributes = info['loc_attributes']
         nonempty_cols  = info['nonempty_cols']
+        allowed_vals = info['allowed_vals']
         
         try:
             # 1. Read the data.
@@ -179,6 +212,9 @@ def pull_data_from_excel():
             # 5. Validate nonempty columns have no empty rows.
             error_count += check_for_missing_values(filename, sheetname, df, nonempty_cols)
             
+            # 6. Validate only allowed values in specified columns.
+            error_count += check_for_only_allowed_values(filename, sheetname, df, allowed_vals)
+            
             data_dict[sheetname] = df
             
         except Exception as e:
@@ -190,4 +226,4 @@ def pull_data_from_excel():
     return data_dict, error_count
     
 # Testing
-#excel_data, error_count = pull_data_from_excel()
+#excel_data_, error_count_ = pull_data_from_excel()
