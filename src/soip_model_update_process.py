@@ -196,7 +196,7 @@ transport_load_size_orig = data_warehouse_data['transport_load_size'].copy()
 
 #%%
 
-########################################## Number of Depots Subquery - (For 020-Lane Attributes)
+########################################## Number of Depots - (For 020-Lane Attributes)
 # uses nbr_of_depots
 nod = nbr_of_depots.copy()
 nod['ModelID'] = np.nan
@@ -218,7 +218,7 @@ nod.update(fac)
 nod.reset_index(inplace=True)
 nod.dropna(inplace=True)
 
-########################################## Transport Load Size Query - (For 070-Trans Load Size)
+########################################## Transport Load Size - (For 070-Trans Load Size)
 iss = transport_load_size[transport_load_size['movetype']=='Issue'].copy()
 oth = transport_load_size[transport_load_size['movetype']!='Issue'].copy()
 iss = iss.merge(customers[['loccode', 'customername']], how='left', left_on='customer_Loc_Code', right_on='loccode')
@@ -237,6 +237,22 @@ tls['destinationname'] = tls.apply(lambda row: row['ModelID'] if row['movetype']
 # NOTE: 298 Rows where ModelID is blank... 28 issue locations and 275 return locations are receiving
 # or returning pallets and are not in the model.
 
+########################################## SOIP Assumptions - (For 090-Flag Multi-Source Options)
+msl = excel_data['MultiSource List'].copy()
+msl = msl.merge(customers[['loccode', 'customername']], how='left', left_on='CustomerCode', right_on='loccode')
+msl = msl.merge(facilities[['loccode', 'facilityname']], how='left', left_on='CustomerCode', right_on='loccode', suffixes=('_issu', '_retu'))
+msl = msl.merge(facilities[['loccode', 'facilityname']], how='left', left_on='DepotCode', right_on='loccode', suffixes=('_retu', '_depot'))
+
+cond = msl['MoveType']=='Issue'
+msl.loc[cond, 'OModelID']  = msl.loc[cond, 'facilityname_depot']
+msl.loc[~cond, 'OModelID'] = msl.loc[~cond, 'facilityname_retu']
+msl.loc[cond, 'DModelID']  = msl.loc[cond, 'customername']
+msl.loc[~cond, 'DModelID'] = msl.loc[~cond, 'facilityname_depot']
+
+msl = msl[msl['OK to Include SOIP'].isin(['YES', 'Yes', 'Y', 'y'])]
+
+#ret = msl.loc[msl['MoveType']=='Return', 'OModelID'].unique() # 37
+#iss = msl.loc[msl['MoveType']=='Issue', 'DModelID'].unique() # 49
 
 
 ########################################## Update Customer Fulfillment Policies
@@ -368,9 +384,26 @@ customerfulfillmentpolicies.reset_index(inplace=True)
 #060 - Transportation Rates Historical
 
 #090 - Flag Multi-Source Options
+cols = ['sourcename', 'customername']
+cfp = customerfulfillmentpolicies[cols].copy()
 
+iss = msl.loc[msl['MoveType']=='Issue', 'DModelID'].drop_duplicates().to_frame()
+cfp = cfp.merge(iss, how='left', left_on='customername', right_on='DModelID')
+cols = ['OModelID', 'DModelID']
+cfp = cfp.merge(msl[cols], how='left', left_on=['sourcename', 'customername'], 
+                                       right_on=['OModelID', 'DModelID'], suffixes=('', '_msl'))
 
+cond_N = ~cfp['DModelID'].isna() &  cfp['OModelID'].isna()
+cond_Y = ~cfp['DModelID'].isna() & ~cfp['OModelID'].isna()
 
+cfp.loc[cond_N, 'multi_source_option'] = 'N'
+cfp.loc[cond_Y, 'multi_source_option'] = 'Y'
+
+index_cols = ['customername', 'sourcename']
+cfp.set_index(index_cols, inplace=True)
+customerfulfillmentpolicies.set_index(index_cols, inplace=True)
+customerfulfillmentpolicies.update(cfp)
+customerfulfillmentpolicies.reset_index(inplace=True)
 
 
 ########################################## Update Customers
@@ -520,10 +553,42 @@ facilities.reset_index(inplace=True)
 ########################################## Update Groups
 
 #090 - Flag Multi-Source Options
+#Return locations
+ret = msl.loc[msl['MoveType']=='Return', 'OModelID'].drop_duplicates().to_frame() # 37
+ret_locs = facilities.loc[facilities['facilityname'].str.startswith('R_'),
+                          'facilityname'].drop_duplicates().to_frame()
+ret_locs = ret_locs.merge(ret, how='left', left_on='facilityname', right_on='OModelID')
 
+cond = ~ret_locs['OModelID'].isnull()
+ret_locs.loc[cond, 'groupname']  = 'SplitSource_Distributor_AllowToMultiSource'
+ret_locs.loc[~cond, 'groupname'] = 'SplitSource_Distributor_KeepSingleSource'
+ret_locs['grouptype'] = 'Facilities'
+ret_locs.rename(columns={'facilityname':'membername'}, inplace=True)
 
+# Issue locations
+iss = msl.loc[msl['MoveType']=='Issue', 'DModelID'].drop_duplicates().to_frame() # 49
+iss_locs = customers['customername'].drop_duplicates().to_frame()
+iss_locs = iss_locs.merge(iss, how='left', left_on='customername', right_on='DModelID')
 
+cond = ~iss_locs['DModelID'].isnull()
+iss_locs.loc[cond, 'groupname']  = 'SplitSource_Renter_AllowToMultiSource'
+iss_locs.loc[~cond, 'groupname'] = 'SplitSource_Renter_KeepSingleSource'
+iss_locs['grouptype'] = 'Customers'
+iss_locs.rename(columns={'customername':'membername'}, inplace=True)
 
+cols = ['membername', 'groupname', 'grouptype']
+grp = pd.concat([iss_locs[cols], ret_locs[cols]])
+grp['status'] = 'ADDED'
+grp['notes'] = 'ADDED'
+
+# Note: Can't use DataFrame.update for groups, as the primary keys of dataset are what is being 
+# updated. Need to reform the Groups dataframe.
+cond = groups['groupname'].isin(['SplitSource_Distributor_KeepSingleSource',
+                                 'SplitSource_Distributor_AllowToMultiSource',
+                                 'SplitSource_Renter_KeepSingleSource',
+                                 'SplitSource_Renter_AllowToMultiSource'])
+# This is the new Groups table.
+grp = pd.concat([grp, groups[~cond]])
 
 ########################################## Update Inventory Constraints
 #010 - Depot Costs and Attributes v2
@@ -732,6 +797,27 @@ replenishmentpolicies.reset_index(inplace=True)
 #060 - Transportation Rates Historical
 
 #090 - Flag Multi-Source Options
+cols = ['sourcename', 'facilityname']
+rps = replenishmentpolicies[cols].copy()
+
+ret = msl.loc[msl['MoveType']=='Return', 'OModelID'].drop_duplicates().to_frame()
+rps = rps.merge(ret, how='left', left_on='sourcename', right_on='OModelID')
+cols = ['OModelID', 'DModelID']
+rps = rps.merge(msl[cols], how='left', left_on=['sourcename', 'facilityname'], 
+                                       right_on=['OModelID', 'DModelID'], suffixes=('', '_msl'))
+
+cond_N = ~rps['OModelID'].isna() &  rps['DModelID'].isna()
+cond_Y = ~rps['OModelID'].isna() & ~rps['DModelID'].isna()
+
+rps.loc[cond_N, 'multi_source_option'] = 'N'
+rps.loc[cond_Y, 'multi_source_option'] = 'Y'
+
+index_cols = ['facilityname', 'sourcename']
+rps.set_index(index_cols, inplace=True)
+replenishmentpolicies.set_index(index_cols, inplace=True)
+replenishmentpolicies.update(rps)
+replenishmentpolicies.reset_index(inplace=True)
+
 
 #100 - Transfer Matrix Update
 cols = ['facilityname', 'sourcename', 'odepottype', 'ddepottype', 'status']
@@ -872,6 +958,28 @@ warehousingpolicies[cols] = 0
 warehousingpolicies.set_index('facilityname')
 warehousingpolicies.update(whp)
 warehousingpolicies.reset_index(inplace=True)
+
+#%% 060 Transportation Rates Historical
+
+# Shipment History Process.
+shp_hist = transport_rates_hist_costs.copy()
+
+cond = (shp_hist['Ttl_LH_Cost']>100) | (shp_hist['Carrier_Type']=='CPU')
+shp_hist = shp_hist[cond]
+
+groupby_cols = ['movetype', 'Lane_ID', 'Depot', 'Customer', 'SCAC']
+shp_hist = shp_hist.groupby(groupby_cols)[['Total_Loads', 'Ttl_LH_Cost']].sum()
+
+cond = shp_hist['Total_Loads'] > 5
+shp_hist = shp_hist[cond]
+
+groupby_cols = ['movetype', 'Lane_ID', 'Depot', 'Customer']
+shp_hist_ttl = shp_hist.groupby(groupby_cols).agg({'Total_Loads':['max','sum'],
+                                                   'Ttl_LH_Cost':'sum'}).reset_index()
+shp_hist_ttl.columns = shp_hist_ttl.columns.map(lambda x: f"{x[1]}{x[0]}")
+
+
+
 
 
 #%% Compare original to updated dataframes.
