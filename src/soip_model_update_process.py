@@ -961,22 +961,58 @@ warehousingpolicies.reset_index(inplace=True)
 
 #%% 060 Transportation Rates Historical
 
+# Calculate the average cost per load for a given OD pair, movetype. 
+# Want to put a SCAC & carrier_type to that OD pair as a reference point, 
+# so pick the one that is the most common for that OD pair.
+# Calculate the avg cost per load cost across all carriers.
+
+
+
 # Shipment History Process.
 shp_hist = transport_rates_hist_costs.copy()
 
 cond = (shp_hist['Ttl_LH_Cost']>100) | (shp_hist['Carrier_Type']=='CPU')
 shp_hist = shp_hist[cond]
 
-groupby_cols = ['movetype', 'Lane_ID', 'Depot', 'Customer', 'SCAC']
+groupby_cols = ['movetype', 'Lane_ID', 'Depot', 'Customer', 'SCAC', 'Carrier_Type']
 shp_hist = shp_hist.groupby(groupby_cols)[['Total_Loads', 'Ttl_LH_Cost']].sum()
 
 cond = shp_hist['Total_Loads'] > 5
-shp_hist = shp_hist[cond]
+shp_hist = shp_hist[cond].reset_index()
 
 groupby_cols = ['movetype', 'Lane_ID', 'Depot', 'Customer']
 shp_hist_ttl = shp_hist.groupby(groupby_cols).agg({'Total_Loads':['max','sum'],
                                                    'Ttl_LH_Cost':'sum'}).reset_index()
 shp_hist_ttl.columns = shp_hist_ttl.columns.map(lambda x: f"{x[1]}{x[0]}")
+
+shp_hist_joined = shp_hist_ttl.merge(shp_hist, how='inner', 
+                                     left_on=['movetype', 'Lane_ID', 'maxTotal_Loads'],
+                                     right_on=['movetype', 'Lane_ID', 'Total_Loads'],
+                                     suffixes=('', '_drop'))
+
+[c for c in shp_hist_joined.columns if '_drop' in c]
+shp_hist_joined.drop(columns=['Depot_drop', 'Customer_drop', 'Total_Loads', 'Ttl_LH_Cost'], inplace=True)
+
+
+
+
+#%%
+
+# =============================================================================
+# Create a workflow to do the following:
+#     - Create an "rfq_rate" column in TransportationPolicies
+#     - Update rfq_rate with Excel data provided by Dean
+#     - Update 'rateused' according to the priority outlined below.
+# 
+# Rate priority:
+#     RFQ => Historical (any rate that isn't 999,999) => Market (should always have a value)
+# =============================================================================
+
+
+
+
+
+
 
 
 
