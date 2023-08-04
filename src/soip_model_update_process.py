@@ -960,15 +960,13 @@ warehousingpolicies.update(whp)
 warehousingpolicies.reset_index(inplace=True)
 
 #%% 060 Transportation Rates Historical
+# Shipment History Process.
 
 # Calculate the average cost per load for a given OD pair, movetype. 
 # Want to put a SCAC & carrier_type to that OD pair as a reference point, 
 # so pick the one that is the most common for that OD pair.
 # Calculate the avg cost per load cost across all carriers.
 
-
-
-# Shipment History Process.
 shp_hist = transport_rates_hist_costs.copy()
 
 cond = (shp_hist['Ttl_LH_Cost']>100) | (shp_hist['Carrier_Type']=='CPU')
@@ -980,18 +978,70 @@ shp_hist = shp_hist.groupby(groupby_cols)[['Total_Loads', 'Ttl_LH_Cost']].sum()
 cond = shp_hist['Total_Loads'] > 5
 shp_hist = shp_hist[cond].reset_index()
 
-groupby_cols = ['movetype', 'Lane_ID', 'Depot', 'Customer']
-shp_hist_ttl = shp_hist.groupby(groupby_cols).agg({'Total_Loads':['max','sum'],
-                                                   'Ttl_LH_Cost':'sum'}).reset_index()
-shp_hist_ttl.columns = shp_hist_ttl.columns.map(lambda x: f"{x[1]}{x[0]}")
+groupby_cols = ['movetype', 'Lane_ID']
+shp_cst_per_load_avg = shp_hist.groupby(groupby_cols)[['Total_Loads', 'Ttl_LH_Cost']].sum().reset_index()
 
-shp_hist_joined = shp_hist_ttl.merge(shp_hist, how='inner', 
-                                     left_on=['movetype', 'Lane_ID', 'maxTotal_Loads'],
-                                     right_on=['movetype', 'Lane_ID', 'Total_Loads'],
-                                     suffixes=('', '_drop'))
+groupby_cols = ['movetype', 'Lane_ID', 'SCAC', 'Carrier_Type']
+shp_top_carrier = shp_hist.groupby(groupby_cols)[['Total_Loads']].sum().reset_index()
+shp_top_carrier = shp_top_carrier.sort_values(['Total_Loads', 'SCAC'], ascending=[False, True]).groupby(['movetype', 'Lane_ID']).first().reset_index()
 
-[c for c in shp_hist_joined.columns if '_drop' in c]
-shp_hist_joined.drop(columns=['Depot_drop', 'Customer_drop', 'Total_Loads', 'Ttl_LH_Cost'], inplace=True)
+merge_cols = ['movetype', 'Lane_ID']
+shp_hist_final = shp_cst_per_load_avg.merge(shp_top_carrier, how='inner', on=merge_cols,
+                                            suffixes=('', '_carrier_max'))
+shp_hist_final['CostPerLoadAvg'] = shp_hist_final['Ttl_LH_Cost']/shp_hist_final['Total_Loads']
+shp_hist_final['FromLocCode'] = shp_hist_final['Lane_ID'].str[0:5]
+shp_hist_final['ToLocCode']   = shp_hist_final['Lane_ID'].str[-5:]
+
+# Bring in Model ID's for the Origin and Destination Locations
+locs_issue  = customers[['customername', 'loccode']].drop_duplicates()
+locs_depot  = facilities.loc[facilities['facilityname'].str.startswith('D_'), ['facilityname', 'loccode']].drop_duplicates()
+locs_return = facilities.loc[facilities['facilityname'].str.startswith('R_'), ['facilityname', 'loccode']].drop_duplicates()
+
+s = shp_hist_final.copy()   # Renaming to 's' to make code easier to read/write.
+# Join to get renter customername.
+s = s.merge(locs_issue, how='left', left_on='ToLocCode', right_on='loccode')
+# Join to get issuing depot's facilityname.
+s = s.merge(locs_depot, how='left', left_on='FromLocCode', right_on='loccode', suffixes=('_issue_renter','_issue_depot'))
+# Join to get returning distributors facilityname.
+s = s.merge(locs_return, how='left', left_on='FromLocCode', right_on='loccode', suffixes=('_issue_depot','_return_dist'))
+# Join to get the return depot's facilityname.
+s = s.merge(locs_depot, how='left', left_on='ToLocCode', right_on='loccode', suffixes=('_return_dist','_return_depot'))
+# Assign the from location and to location model names.
+s.loc[s['movetype']=='Issue', 'OModelID'] = s.loc[s['movetype']=='Issue', 'facilityname_issue_depot']
+s.loc[s['movetype']=='Issue', 'DModelID'] = s.loc[s['movetype']=='Issue', 'customername']
+s.loc[s['movetype']=='Return', 'OModelID'] = s.loc[s['movetype']=='Return', 'facilityname_return_dist']
+s.loc[s['movetype']=='Return', 'DModelID'] = s.loc[s['movetype']=='Return', 'facilityname']
+
+cols_to_keep = ['movetype','Lane_ID','FromLocCode','ToLocCode','SCAC','Carrier_Type',
+                'CostPerLoadAvg', 'OModelID', 'DModelID']
+s = s[cols_to_keep]
+
+cost_per_load = s.copy()   # Renaming to 'cost_per_load' as this is more descriptive.
+
+# History - Loads by lane type
+lblt = transport_rates_hist_load_counts.copy()
+
+# Update 'Type' based on conditions.
+def label_type(row):
+    split = row['Split_Carrier_Type_Flag']=='Split'
+    cpu = row['CPU_Loads']
+    ded = row['Dedicated_Loads']
+    oth = row['Other_Loads']
+    
+    if not split:
+        if cpu > 0: return 'CPU'
+        elif ded > 0: return 'Dedicated'
+        else: return 'Contract Carrier'
+    
+    else:
+        if cpu > ded and cpu > oth: return 'CPU'
+        elif ded > cpu and ded > oth: return 'Dedicated'
+        else: return 'Contract Carrier'
+        
+lblt['Type'] = lblt.apply(label_type, axis=1)   
+
+l = lblt[lblt['Split_Carrier_Type_Flag']=='Split']
+l2 = lblt[~(lblt['Split_Carrier_Type_Flag']=='Split')]
 
 
 
