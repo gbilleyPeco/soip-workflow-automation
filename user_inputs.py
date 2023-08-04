@@ -12,6 +12,7 @@ DB_NAME = 'PECO 2023-08 SOIP Opt copy 1' # Opt Model Name
 SOIP_DEPOT_ASSIGNMENTS_FILENAME = 'SOIP - Depot Assignments - TESTING.xlsx'
 SOIP_OPT_ASSUMPTIONS_FILENAME = 'SOIP Optimization Assumptions - TESTING.xlsx'
 SCAC_CARRIER_TYPE_FILENAME = 'SCAC to Carrier Type.xlsx'
+TRANS_RFQ_RATES_FILENAME = 'Trans RFQ Rates.xlsx'
 
 # User supplied notes in Cosmic Frog.
 RepairCapacityNotes = 'Repair_Capacity'
@@ -26,3 +27,4 @@ NewPalletCost = 25
 Avg_Load_Size_Issues = 521
 Avg_Load_Size_Returns = 487
 Avg_Load_Size_Transfers = 560
+Fuel_Surcharge = 0.51

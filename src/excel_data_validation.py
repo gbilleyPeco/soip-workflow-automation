@@ -15,7 +15,7 @@ if ROOT not in sys.path:
     
 # Import User-Input data.
 from user_inputs import SOIP_DEPOT_ASSIGNMENTS_FILENAME, SOIP_OPT_ASSUMPTIONS_FILENAME, \
-    SCAC_CARRIER_TYPE_FILENAME
+    SCAC_CARRIER_TYPE_FILENAME, TRANS_RFQ_RATES_FILENAME
 
 
 def check_for_duplicate_keys(filename, sheetname, df, key_cols):
@@ -41,6 +41,9 @@ def check_for_one_to_one(filename, sheetname, df, loc_attributes):
 #     Returns 0 if no errors, > 0 if errors.
 # =============================================================================
     error = 0
+    
+    if loc_attributes is None:
+        return error
     
     # For each group of 1:1 attributes...
     for atts in loc_attributes:
@@ -179,7 +182,16 @@ def pull_data_from_excel():
                       'loc_attributes' : [['TMS_CarrierSCAC', 'TMS_CarrierName']],
                       'nonempty_cols' : ['TMS_CarrierSCAC'],
                       'allowed_vals' : {'Carrier_Type': ['CPU', 'Dedicated']}
+                      },
+        
+        'Trans RFQ Rates':{'filename' : TRANS_RFQ_RATES_FILENAME,
+                           'start_row' : 0,
+                           'key_cols' : ['Lane Name'],
+                           'loc_attributes' : None,
+                           'nonempty_cols' : ['Lane Name', 'Final Rate Award'],
+                           'allowed_vals' : None
                       }
+        
         }
         
     # Create a dictionary to store the Excel data.

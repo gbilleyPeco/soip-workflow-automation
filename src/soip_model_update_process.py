@@ -28,7 +28,7 @@ import warnings
 import os
 import sys
 from optilogic import pioneer
-from collections import defaultdict
+#from collections import defaultdict
 
 # Set display format for pandas.
 pd.options.display.float_format = "{:,.2f}".format
@@ -46,7 +46,7 @@ from sql_statements import tbl_tab_Location_sql, nbr_of_depots_sql, \
 from user_inputs import USER_NAME, APP_KEY, DB_NAME, RepairCapacityNotes, MinInventoryNotes, \
     DepotCapacityNotes, BeginningInvNotes, ReturnsProductionNotes, CustomerDemandNotes, \
     ProductionPolicyRepairBOMName, NewPalletCost, Avg_Load_Size_Issues, Avg_Load_Size_Returns, \
-    Avg_Load_Size_Transfers
+    Avg_Load_Size_Transfers, Fuel_Surcharge
     
 # Import Excel IO function.
 from excel_data_validation import pull_data_from_excel
@@ -1028,19 +1028,34 @@ s = s.merge(locs_return, how='left', left_on='FromLocCode', right_on='loccode', 
 # Join to get the return depot's facilityname.
 s = s.merge(locs_depot, how='left', left_on='ToLocCode', right_on='loccode', suffixes=('_return_dist','_return_depot'))
 # Assign the from location and to location model names.
-s.loc[s['movetype']=='Issue', 'OModelID'] = s.loc[s['movetype']=='Issue', 'facilityname_issue_depot']
-s.loc[s['movetype']=='Issue', 'DModelID'] = s.loc[s['movetype']=='Issue', 'customername']
-s.loc[s['movetype']=='Return', 'OModelID'] = s.loc[s['movetype']=='Return', 'facilityname_return_dist']
-s.loc[s['movetype']=='Return', 'DModelID'] = s.loc[s['movetype']=='Return', 'facilityname']
+s.loc[s['movetype']=='Issue', 'originname'] = s.loc[s['movetype']=='Issue', 'facilityname_issue_depot']
+s.loc[s['movetype']=='Issue', 'destinationname'] = s.loc[s['movetype']=='Issue', 'customername']
+s.loc[s['movetype']=='Return', 'originname'] = s.loc[s['movetype']=='Return', 'facilityname_return_dist']
+s.loc[s['movetype']=='Return', 'destinationname'] = s.loc[s['movetype']=='Return', 'facilityname']
 
 cols_to_keep = ['movetype','Lane_ID','FromLocCode','ToLocCode','SCAC','Carrier_Type',
-                'CostPerLoadAvg', 'OModelID', 'DModelID']
+                'CostPerLoadAvg', 'originname', 'destinationname']
 s = s[cols_to_keep]
 
 cost_per_load = s.copy()   # Renaming to 'cost_per_load' as this is more descriptive.
 
+
+
+
+
+
+
+
+
+
+
+# Examine here.
+
+
+
 # History - Issues, Returns, and Transfers by Lane Type (loads by lane type)
 lblt = transport_rates_hist_load_counts.copy()
+lblt = lblt.dropna()
 
 # Update 'Type' based on conditions.
 def label_type(row):
@@ -1062,44 +1077,127 @@ def label_type(row):
 lblt['Type'] = lblt.apply(label_type, axis=1)   
 
 # Bring in ModelID's
-# lblt_orig = lblt.copy()   # For testing.
-
 lblt_iss = lblt[lblt['movetype']=='Issue'].copy()
 lblt_ret = lblt[lblt['movetype']=='Return'].copy()
 lblt_trs = lblt[~lblt['movetype'].isin(['Issue', 'Return'])].copy()
 
 lblt_iss = lblt_iss.merge(locs_issue, how='left', left_on='Customer', right_on='loccode')
 lblt_iss = lblt_iss.merge(locs_depot, how='left', left_on='Depot', right_on='loccode')
-lblt_iss.rename(columns={'facilityname':'OModelID', 'customername':'DModelID'}, inplace=True)
+lblt_iss.rename(columns={'facilityname':'originname', 'customername':'destinationname'}, inplace=True)
 lblt_iss.drop(columns=['loccode_x', 'loccode_y'], inplace=True)
 
 lblt_ret = lblt_ret.merge(locs_return, how='left', left_on='Customer', right_on='loccode')
 lblt_ret = lblt_ret.merge(locs_depot, how='left', left_on='Depot', right_on='loccode')
-lblt_ret.rename(columns={'facilityname_x':'OModelID', 'facilityname_y':'DModelID'}, inplace=True)
+lblt_ret.rename(columns={'facilityname_x':'originname', 'facilityname_y':'destinationname'}, inplace=True)
 lblt_ret.drop(columns=['loccode_x', 'loccode_y'], inplace=True)
 
 lblt_trs['orig'] = lblt_trs['Lane_ID'].str[0:5]
 lblt_trs['dest'] = lblt_trs['Lane_ID'].str[-5:]
 lblt_trs = lblt_trs.merge(locs_depot, how='left', left_on='orig', right_on='loccode')
 lblt_trs = lblt_trs.merge(locs_depot, how='left', left_on='dest', right_on='loccode')
-lblt_trs.rename(columns={'facilityname_x':'OModelID', 'facilityname_y':'DModelID'}, inplace=True)
+lblt_trs.rename(columns={'facilityname_x':'originname', 'facilityname_y':'destinationname'}, inplace=True)
 lblt_trs.drop(columns=['loccode_x', 'loccode_y'], inplace=True)
 
-cols_to_keep = list(lblt.columns)+['OModelID', 'DModelID']
+cols_to_keep = list(lblt.columns)+['originname', 'destinationname']
 
 lblt = pd.concat([lblt_iss[cols_to_keep], lblt_ret[cols_to_keep], lblt_trs[cols_to_keep]]).reset_index(drop=True)
 
-# =============================================================================
-# Create a workflow to do the following:
-#     - Create an "rfq_rate" column in TransportationPolicies
-#     - Update rfq_rate with Excel data provided by Dean
-#     - Update 'rateused' according to the priority outlined below.
-# 
-# Rate priority:
-#     RFQ => Historical (any rate that isn't 999,999) => Market (should always have a value)
-# =============================================================================
 # Set CPU Flag (transportation policies)
+cols = ['originname', 'destinationname', 'marketrate']
+tps = transportationpolicies[cols].copy()
+
+tps['fixedcost'] = tps['marketrate']
+tps['rateused'] = 'MarketRate'
+tps['cpu'] = ''
+
+tps = tps.merge(lblt, how='left', on=['originname', 'destinationname'])
+inner = ~tps['Type'].isnull()
+
+def assign_cpu(row):
+    if row['Type']=='CPU': return 'C'
+    elif row['Type']=='Dedicated': return 'D'
+    else: return None
+    
+tps.loc[inner, 'cpu'] = tps[inner].apply(assign_cpu, axis=1)
+
+
+
+# Stopped here... Need to figure out if this is working properly or not.
+
+
+
+
+
+
+
+
+
+# Join to historical costs.
+tps = tps.merge(cost_per_load, how='left', on=['originname', 'destinationname'])
+
+inner = ~tps['Type'].isnull()
+t = tps[inner]
+
+len(inner)
+
+
+
+
+
+# =============================================================================
+# Create a workflow to do the following:
+#     - Create an "rfq_rate" column in TransportationPolicies
+#     - Update rfq_rate with Excel data provided by Dean
+#     - Update 'rateused' according to the priority outlined below.
+# 
+# Rate priority:
+#     RFQ => Historical (any rate that isn't 999,999) => Market (should always have a value)
+# =============================================================================
+trans_rfq_rates = excel_data['Trans RFQ Rates'].copy()
+trans_rfq_rates.rename(columns={'Final Rate Award':'rfq_rate'}, inplace=True)
+trans_rfq_rates['oloccode'] = trans_rfq_rates['Lane Name'].str[0:5]
+trans_rfq_rates['dloccode'] = trans_rfq_rates['Lane Name'].str[-5:]
+
 tps = transportationpolicies.copy()
+cols = ['oloccode', 'dloccode', 'rfq_rate']
+tps = tps.merge(trans_rfq_rates[cols], how='left', on=['oloccode', 'dloccode'])
+
+tps['oloccode'] = tps['originname'].str[-5:]
+tps['dloccode'] = tps['destinationname'].str[-5:]
+tps['histrate'] = tps['histrate'].replace('',999999).astype(float)
+tps['rfq_rate'] = tps['rfq_rate'].astype(float)
+tps['marketrate'] = tps['marketrate'].astype(float)
+
+# Choose the appropriate rate to use.
+fake_hst = tps['histrate']==999999
+tps.loc[ fake_hst, 'rateused'] = tps[['rfq_rate', 'marketrate']].bfill(axis=1).iloc[:,0]
+tps.loc[~fake_hst, 'rateused'] = tps[['rfq_rate', 'histrate', 'marketrate']].bfill(axis=1).iloc[:,0]
+
+# =============================================================================
+# # Check
+# tps.loc[tps['rateused']==tps['rfq_rate'],['rfq_rate', 'histrate', 'marketrate']].shape   # 40
+# tps.loc[tps['rateused']==tps['histrate'],['rfq_rate', 'histrate', 'marketrate']].shape   # 767,023
+# tps.loc[tps['rateused']==tps['marketrate'],['rfq_rate', 'histrate', 'marketrate']].shape # 178,815
+# 
+# t_r = tps.loc[tps['rateused']==tps['rfq_rate'],['rfq_rate', 'histrate', 'marketrate']].head(10)   # Good
+# t_h = tps.loc[tps['rateused']==tps['histrate'],['rfq_rate', 'histrate', 'marketrate']].head(10)   # Lots of 0's... Is that OK?
+# t_m = tps.loc[tps['rateused']==tps['marketrate'],['rfq_rate', 'histrate', 'marketrate']].head(10) # Good
+# 
+# 
+# t_h2 = tps[tps['rateused']==tps['histrate']].head(100)
+# =============================================================================
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1114,7 +1212,11 @@ tps = transportationpolicies.copy()
 #     - Update 'rateused' according to the priority outlined below.
 # 
 # Rate priority:
-#     RFQ => Historical (any rate that isn't 999,999) => Market (should always have a value)
+#    if CPU:
+#       histrate = 0, marketrate = histrate
+#    
+#    else:
+#       RFQ => Historical (any rate that isn't 999,999) => Market (should always have a value)
 # =============================================================================
 
 
