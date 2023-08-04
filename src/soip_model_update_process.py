@@ -44,9 +44,9 @@ from sql_statements import tbl_tab_Location_sql, nbr_of_depots_sql, \
     
 # Import User-Input data.
 from user_inputs import USER_NAME, APP_KEY, DB_NAME, RepairCapacityNotes, MinInventoryNotes, \
-    DepotCapacityNotes, BeginningInvNotes, ReturnsProductionNotes, CustomerDemandNotes, \
+    DepotCapacityNotes, BeginningInvNotes, ReturnsProductionNotes, \
     ProductionPolicyRepairBOMName, NewPalletCost, Avg_Load_Size_Issues, Avg_Load_Size_Returns, \
-    Avg_Load_Size_Transfers, Fuel_Surcharge
+    Avg_Load_Size_Transfers, Fuel_Surcharge # CustomerDemandNotes, \
     
 # Import Excel IO function.
 from excel_data_validation import pull_data_from_excel
@@ -1010,52 +1010,16 @@ merge_cols = ['movetype', 'Lane_ID']
 shp_hist_final = shp_cst_per_load_avg.merge(shp_top_carrier, how='inner', on=merge_cols,
                                             suffixes=('', '_carrier_max'))
 shp_hist_final['CostPerLoadAvg'] = shp_hist_final['Ttl_LH_Cost']/shp_hist_final['Total_Loads']
-shp_hist_final['FromLocCode'] = shp_hist_final['Lane_ID'].str[0:5]
-shp_hist_final['ToLocCode']   = shp_hist_final['Lane_ID'].str[-5:]
 
-# Bring in Model ID's for the Origin and Destination Locations
-locs_issue  = customers[['customername', 'loccode']].drop_duplicates()
-locs_depot  = facilities.loc[facilities['facilityname'].str.startswith('D_'), ['facilityname', 'loccode']].drop_duplicates()
-locs_return = facilities.loc[facilities['facilityname'].str.startswith('R_'), ['facilityname', 'loccode']].drop_duplicates()
-
-s = shp_hist_final.copy()   # Renaming to 's' to make code easier to read/write.
-# Join to get renter customername.
-s = s.merge(locs_issue, how='left', left_on='ToLocCode', right_on='loccode')
-# Join to get issuing depot's facilityname.
-s = s.merge(locs_depot, how='left', left_on='FromLocCode', right_on='loccode', suffixes=('_issue_renter','_issue_depot'))
-# Join to get returning distributors facilityname.
-s = s.merge(locs_return, how='left', left_on='FromLocCode', right_on='loccode', suffixes=('_issue_depot','_return_dist'))
-# Join to get the return depot's facilityname.
-s = s.merge(locs_depot, how='left', left_on='ToLocCode', right_on='loccode', suffixes=('_return_dist','_return_depot'))
-# Assign the from location and to location model names.
-s.loc[s['movetype']=='Issue', 'originname'] = s.loc[s['movetype']=='Issue', 'facilityname_issue_depot']
-s.loc[s['movetype']=='Issue', 'destinationname'] = s.loc[s['movetype']=='Issue', 'customername']
-s.loc[s['movetype']=='Return', 'originname'] = s.loc[s['movetype']=='Return', 'facilityname_return_dist']
-s.loc[s['movetype']=='Return', 'destinationname'] = s.loc[s['movetype']=='Return', 'facilityname']
-
-cols_to_keep = ['movetype','Lane_ID','FromLocCode','ToLocCode','SCAC','Carrier_Type',
-                'CostPerLoadAvg', 'originname', 'destinationname']
-s = s[cols_to_keep]
-
-cost_per_load = s.copy()   # Renaming to 'cost_per_load' as this is more descriptive.
-
-
-
-
-
-
-
-
-
-
-
-# Examine here.
-
-
+cols_to_keep = ['movetype','Lane_ID','SCAC','Carrier_Type','CostPerLoadAvg']
+cost_per_load = shp_hist_final[cols_to_keep].copy()   # Renaming to 'cost_per_load' as this is more descriptive.
 
 # History - Issues, Returns, and Transfers by Lane Type (loads by lane type)
 lblt = transport_rates_hist_load_counts.copy()
 lblt = lblt.dropna()
+
+# Join Loads by Lane Type to Cost per Load
+lblt = lblt.merge(cost_per_load, how='outer', on=['movetype', 'Lane_ID'])
 
 # Update 'Type' based on conditions.
 def label_type(row):
@@ -1081,6 +1045,12 @@ lblt_iss = lblt[lblt['movetype']=='Issue'].copy()
 lblt_ret = lblt[lblt['movetype']=='Return'].copy()
 lblt_trs = lblt[~lblt['movetype'].isin(['Issue', 'Return'])].copy()
 
+# Bring in Model ID's for the Origin and Destination Locations
+locs_issue  = customers[['customername', 'loccode']].drop_duplicates()
+locs_depot  = facilities.loc[facilities['facilityname'].str.startswith('D_'), ['facilityname', 'loccode']].drop_duplicates()
+locs_return = facilities.loc[facilities['facilityname'].str.startswith('R_'), ['facilityname', 'loccode']].drop_duplicates()
+
+
 lblt_iss = lblt_iss.merge(locs_issue, how='left', left_on='Customer', right_on='loccode')
 lblt_iss = lblt_iss.merge(locs_depot, how='left', left_on='Depot', right_on='loccode')
 lblt_iss.rename(columns={'facilityname':'originname', 'customername':'destinationname'}, inplace=True)
@@ -1101,6 +1071,13 @@ lblt_trs.drop(columns=['loccode_x', 'loccode_y'], inplace=True)
 cols_to_keep = list(lblt.columns)+['originname', 'destinationname']
 
 lblt = pd.concat([lblt_iss[cols_to_keep], lblt_ret[cols_to_keep], lblt_trs[cols_to_keep]]).reset_index(drop=True)
+lblt.dropna(subset=['origin_Name', 'Destination_Name'], inplace=True)
+
+
+
+t = lblt[(lblt['Type']=='CPU') & (lblt['CostPerLoadAvg']>0)]
+
+
 
 # Set CPU Flag (transportation policies)
 cols = ['originname', 'destinationname', 'marketrate']
