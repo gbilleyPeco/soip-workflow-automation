@@ -11,6 +11,7 @@ DB_NAME = 'PECO 2023-08 SOIP Opt copy 1' # Opt Model Name
 # SOIP Excel File Information
 SOIP_DEPOT_ASSIGNMENTS_FILENAME = 'SOIP - Depot Assignments - TESTING.xlsx'
 SOIP_OPT_ASSUMPTIONS_FILENAME = 'SOIP Optimization Assumptions - TESTING.xlsx'
+SCAC_CARRIER_TYPE_FILENAME = 'SCAC to Carrier Type.xlsx'
 
 # User supplied notes in Cosmic Frog.
 RepairCapacityNotes = 'Repair_Capacity'

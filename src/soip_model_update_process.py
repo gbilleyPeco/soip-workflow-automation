@@ -40,7 +40,7 @@ if ROOT not in sys.path:
 
 # Import SQL Statements
 from sql_statements import tbl_tab_Location_sql, nbr_of_depots_sql, \
-    transport_rates_hist_load_counts_sql, transport_rates_hist_costs_sql, transport_load_size_sql
+    trans_load_size_sql, trans_load_counts_sql_raw, trans_costs_sql_raw
     
 # Import User-Input data.
 from user_inputs import USER_NAME, APP_KEY, DB_NAME, RepairCapacityNotes, MinInventoryNotes, \
@@ -113,9 +113,23 @@ def pull_data_from_data_warehouse(sql_name_dict):
     
     return data_dict
 
+def scac_sql_preprocessing(sql_statement, scac_types):
+    cpu = scac_types.loc[scac_types['Carrier_Type']=='CPU', 'TMS_CarrierSCAC']
+    ded = scac_types.loc[scac_types['Carrier_Type']=='Dedicated', 'TMS_CarrierSCAC']
+    
+    cpu_scacs = str(tuple(cpu))
+    ded_scacs = str(tuple(ded))
+    cpu_ded_scacs = str(tuple(pd.concat([cpu, ded])))
+    
+    sql_statement = sql_statement.replace('__CPU_SCACS__', cpu_scacs)
+    sql_statement = sql_statement.replace('__DED_SCACS__', ded_scacs)
+    sql_statement = sql_statement.replace('__CPU_DED_SCACS__', cpu_ded_scacs)
+    
+    return sql_statement
+
+
 # Pull data from Excel.
 excel_data, error_count = pull_data_from_excel()
-
 # Exit the program. Ensure the errors in the Excel data are correct before moving on.
 if error_count > 0:
     exit()
@@ -137,13 +151,22 @@ tables_we_want  = ['customerdemand',
                    ]
 cosmic_frog_data = pull_data_from_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, tables_we_want)
 
+
 # Pull data from PECO's data warehouse.
+# Update transportation SQL with SCAC to Carrier Type mapping.
+print("\nAdding SCAC codes to transportation SQL statements...")
+trans_load_counts_sql = scac_sql_preprocessing(trans_load_counts_sql_raw, excel_data['SCAC Types'])
+trans_costs_sql = scac_sql_preprocessing(trans_costs_sql_raw, excel_data['SCAC Types'])
+
 sql_name_dict = {'tbl_tab_Location':tbl_tab_Location_sql,
                  'nbr_of_depots':nbr_of_depots_sql,
-                 'transport_rates_hist_load_counts':transport_rates_hist_load_counts_sql,
-                 'transport_rates_hist_costs':transport_rates_hist_costs_sql,
-                 'transport_load_size':transport_load_size_sql}
+                 'transport_rates_hist_load_counts':trans_load_counts_sql,
+                 'transport_rates_hist_costs':trans_costs_sql,
+                 'transport_load_size':trans_load_size_sql}
+
 data_warehouse_data = pull_data_from_data_warehouse(sql_name_dict)
+
+
 
 # Cosmic Frog Data
 customerdemand = cosmic_frog_data['customerdemand'].copy()
@@ -175,8 +198,6 @@ productionpolicies_orig = cosmic_frog_data['productionpolicies'].copy()
 replenishmentpolicies_orig = cosmic_frog_data['replenishmentpolicies'].copy()
 transportationpolicies_orig = cosmic_frog_data['transportationpolicies'].copy()
 warehousingpolicies_orig = cosmic_frog_data['warehousingpolicies'].copy()
-
-
 
 # Data Warehouse Data
 tbl_tab_Location = data_warehouse_data['tbl_tab_Location'].copy()
@@ -1018,7 +1039,7 @@ s = s[cols_to_keep]
 
 cost_per_load = s.copy()   # Renaming to 'cost_per_load' as this is more descriptive.
 
-# History - Loads by lane type
+# History - Issues, Returns, and Transfers by Lane Type (loads by lane type)
 lblt = transport_rates_hist_load_counts.copy()
 
 # Update 'Type' based on conditions.
@@ -1040,13 +1061,51 @@ def label_type(row):
         
 lblt['Type'] = lblt.apply(label_type, axis=1)   
 
-l = lblt[lblt['Split_Carrier_Type_Flag']=='Split']
-l2 = lblt[~(lblt['Split_Carrier_Type_Flag']=='Split')]
+# Bring in ModelID's
+# lblt_orig = lblt.copy()   # For testing.
+
+lblt_iss = lblt[lblt['movetype']=='Issue'].copy()
+lblt_ret = lblt[lblt['movetype']=='Return'].copy()
+lblt_trs = lblt[~lblt['movetype'].isin(['Issue', 'Return'])].copy()
+
+lblt_iss = lblt_iss.merge(locs_issue, how='left', left_on='Customer', right_on='loccode')
+lblt_iss = lblt_iss.merge(locs_depot, how='left', left_on='Depot', right_on='loccode')
+lblt_iss.rename(columns={'facilityname':'OModelID', 'customername':'DModelID'}, inplace=True)
+lblt_iss.drop(columns=['loccode_x', 'loccode_y'], inplace=True)
+
+lblt_ret = lblt_ret.merge(locs_return, how='left', left_on='Customer', right_on='loccode')
+lblt_ret = lblt_ret.merge(locs_depot, how='left', left_on='Depot', right_on='loccode')
+lblt_ret.rename(columns={'facilityname_x':'OModelID', 'facilityname_y':'DModelID'}, inplace=True)
+lblt_ret.drop(columns=['loccode_x', 'loccode_y'], inplace=True)
+
+lblt_trs['orig'] = lblt_trs['Lane_ID'].str[0:5]
+lblt_trs['dest'] = lblt_trs['Lane_ID'].str[-5:]
+lblt_trs = lblt_trs.merge(locs_depot, how='left', left_on='orig', right_on='loccode')
+lblt_trs = lblt_trs.merge(locs_depot, how='left', left_on='dest', right_on='loccode')
+lblt_trs.rename(columns={'facilityname_x':'OModelID', 'facilityname_y':'DModelID'}, inplace=True)
+lblt_trs.drop(columns=['loccode_x', 'loccode_y'], inplace=True)
+
+cols_to_keep = list(lblt.columns)+['OModelID', 'DModelID']
+
+lblt = pd.concat([lblt_iss[cols_to_keep], lblt_ret[cols_to_keep], lblt_trs[cols_to_keep]]).reset_index(drop=True)
+
+# =============================================================================
+# Create a workflow to do the following:
+#     - Create an "rfq_rate" column in TransportationPolicies
+#     - Update rfq_rate with Excel data provided by Dean
+#     - Update 'rateused' according to the priority outlined below.
+# 
+# Rate priority:
+#     RFQ => Historical (any rate that isn't 999,999) => Market (should always have a value)
+# =============================================================================
+# Set CPU Flag (transportation policies)
+tps = transportationpolicies.copy()
 
 
 
 
-#%%
+
+
 
 # =============================================================================
 # Create a workflow to do the following:

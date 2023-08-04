@@ -14,7 +14,8 @@ if ROOT not in sys.path:
     sys.path.append(ROOT)
     
 # Import User-Input data.
-from user_inputs import SOIP_DEPOT_ASSIGNMENTS_FILENAME, SOIP_OPT_ASSUMPTIONS_FILENAME  
+from user_inputs import SOIP_DEPOT_ASSIGNMENTS_FILENAME, SOIP_OPT_ASSUMPTIONS_FILENAME, \
+    SCAC_CARRIER_TYPE_FILENAME
 
 
 def check_for_duplicate_keys(filename, sheetname, df, key_cols):
@@ -170,7 +171,15 @@ def pull_data_from_excel():
                              'nonempty_cols' : ['MoveType', 'Loc Code', 'Location Name', 'Default Depot Code',
                                                 'Default Depot Name'],
                              'allowed_vals' : None
-                             }
+                             },
+        
+        'SCAC Types':{'filename' : SCAC_CARRIER_TYPE_FILENAME,
+                      'start_row' : 0,
+                      'key_cols' : ['TMS_CarrierSCAC', 'TMS_CarrierName'],
+                      'loc_attributes' : [['TMS_CarrierSCAC', 'TMS_CarrierName']],
+                      'nonempty_cols' : ['TMS_CarrierSCAC'],
+                      'allowed_vals' : {'Carrier_Type': ['CPU', 'Dedicated']}
+                      }
         }
         
     # Create a dictionary to store the Excel data.
@@ -185,6 +194,8 @@ def pull_data_from_excel():
     #   3. Validate that there are not multiple rows with the same primary key.
     #   4. Validate that the location attributes are one-to-one. 
     #      i.e. that a LocCode doesn't have multiple LocDescriptions. 
+    #   5. Validate nonempty columns have no empty rows.
+    #   6. Validate only allowed values in specified columns.
     
     print('\nReading and validating Excel data...\n')
     for sheetname, info in excel_info.items():
