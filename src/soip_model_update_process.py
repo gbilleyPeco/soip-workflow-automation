@@ -1073,74 +1073,48 @@ cols_to_keep = list(lblt.columns)+['originname', 'destinationname']
 lblt = pd.concat([lblt_iss[cols_to_keep], lblt_ret[cols_to_keep], lblt_trs[cols_to_keep]]).reset_index(drop=True)
 lblt.dropna(subset=['origin_Name', 'Destination_Name'], inplace=True)
 
+# Rename to match transportationpolicies column names.
+lblt.rename(columns={'CostPerLoadAvg':'histrate', 'SCAC':'scac', 'Type':'scaccarriertype'}, inplace=True)
 
-
-t = lblt[(lblt['Type']=='CPU') & (lblt['CostPerLoadAvg']>0)]
-
-
-
-# Set CPU Flag (transportation policies)
-cols = ['originname', 'destinationname', 'marketrate']
+# Update rates in transportationpolicies based on data in lblt.
+# NOTE: Need to add a new column to transportationpolicies (rfq_rate).
+cols = ['originname', 'destinationname', 'oloccode','dloccode', 'marketrate', 'histrate', 
+        'rateused', 'fixedcost', 'scac', 'scaccarriertype', 'cpu', 'unitcost', 'dutyrate_tbf', 
+        'dutyrate']
 tps = transportationpolicies[cols].copy()
-
-tps['fixedcost'] = tps['marketrate']
-tps['rateused'] = 'MarketRate'
-tps['cpu'] = ''
-
-tps = tps.merge(lblt, how='left', on=['originname', 'destinationname'])
-inner = ~tps['Type'].isnull()
-
-def assign_cpu(row):
-    if row['Type']=='CPU': return 'C'
-    elif row['Type']=='Dedicated': return 'D'
-    else: return None
-    
-tps.loc[inner, 'cpu'] = tps[inner].apply(assign_cpu, axis=1)
-
-
-
-# Stopped here... Need to figure out if this is working properly or not.
-
-
-
-
-
-
-
-
-
-# Join to historical costs.
-tps = tps.merge(cost_per_load, how='left', on=['originname', 'destinationname'])
-
-inner = ~tps['Type'].isnull()
-t = tps[inner]
-
-len(inner)
-
-
-
-
 
 # =============================================================================
 # Create a workflow to do the following:
 #     - Create an "rfq_rate" column in TransportationPolicies
 #     - Update rfq_rate with Excel data provided by Dean
+#     - Update SCAC, Carrier_Type, and histrate (CostPerLoadAvg) from lblt
 #     - Update 'rateused' according to the priority outlined below.
 # 
 # Rate priority:
-#     RFQ => Historical (any rate that isn't 999,999) => Market (should always have a value)
+#     if carriertype = 'CPU':
+#         rateused = 0
+#     else: 
+#         RFQ => Historical (any rate that isn't 999,999) => Market (should always have a value)
 # =============================================================================
+                       
+# Create an "rfq_rate" column in TransportationPolicies and update with Excel data.
 trans_rfq_rates = excel_data['Trans RFQ Rates'].copy()
 trans_rfq_rates.rename(columns={'Final Rate Award':'rfq_rate'}, inplace=True)
 trans_rfq_rates['oloccode'] = trans_rfq_rates['Lane Name'].str[0:5]
 trans_rfq_rates['dloccode'] = trans_rfq_rates['Lane Name'].str[-5:]
 
-tps = transportationpolicies.copy()
 cols = ['oloccode', 'dloccode', 'rfq_rate']
 tps = tps.merge(trans_rfq_rates[cols], how='left', on=['oloccode', 'dloccode'])
 
-tps['oloccode'] = tps['originname'].str[-5:]
-tps['dloccode'] = tps['destinationname'].str[-5:]
+# Update histrate, scac, scaccarriertype, and cpu
+cols = ['originname', 'destinationname', 'histrate', 'scac', 'scaccarriertype']
+tps = tps.merge(lblt[cols], how='left', on=['originname', 'destinationname'], suffixes=('_drop', ''))
+
+
+t=tps.head(10000)
+
+
+# Choose
 tps['histrate'] = tps['histrate'].replace('',999999).astype(float)
 tps['rfq_rate'] = tps['rfq_rate'].astype(float)
 tps['marketrate'] = tps['marketrate'].astype(float)
