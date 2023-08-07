@@ -209,7 +209,7 @@ def pull_data_from_excel():
     #   5. Validate nonempty columns have no empty rows.
     #   6. Validate only allowed values in specified columns.
     
-    print('\nReading and validating Excel data...\n')
+    print('\nReading and validating Excel data...')
     for sheetname, info in excel_info.items():
         filename  = info['filename']
         start_row = info['start_row']
@@ -245,7 +245,7 @@ def pull_data_from_excel():
             print(e)
             pass
     
-    if error_count == 0: print('Done. No Excel data errors detected!')
+    if error_count == 0: print('\tDone. No Excel data errors detected!')
     return data_dict, error_count
     
 # Testing
