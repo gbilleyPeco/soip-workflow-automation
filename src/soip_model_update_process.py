@@ -46,7 +46,7 @@ from sql_statements import tbl_tab_Location_sql, nbr_of_depots_sql, \
 from user_inputs import USER_NAME, APP_KEY, DB_NAME, RepairCapacityNotes, MinInventoryNotes, \
     DepotCapacityNotes, BeginningInvNotes, ReturnsProductionNotes, \
     ProductionPolicyRepairBOMName, NewPalletCost, Avg_Load_Size_Issues, Avg_Load_Size_Returns, \
-    Avg_Load_Size_Transfers, Fuel_Surcharge # CustomerDemandNotes, \
+    Avg_Load_Size_Transfers, Fuel_Surcharge, Duty_Rate_US_to_Canada, Duty_Rate_Canada_to_US # CustomerDemandNotes, \
     
 # Import Excel IO function.
 from excel_data_validation import pull_data_from_excel
@@ -133,6 +133,20 @@ excel_data, error_count = pull_data_from_excel()
 # Exit the program. Ensure the errors in the Excel data are correct before moving on.
 if error_count > 0:
     exit()
+
+# Pull data from PECO's data warehouse.
+# Update transportation SQL with SCAC to Carrier Type mapping.
+print("\nAdding SCAC codes to transportation SQL statements...")
+trans_load_counts_sql = scac_sql_preprocessing(trans_load_counts_sql_raw, excel_data['SCAC Types'])
+trans_costs_sql = scac_sql_preprocessing(trans_costs_sql_raw, excel_data['SCAC Types'])
+
+sql_name_dict = {'tbl_tab_Location':tbl_tab_Location_sql,
+                 'nbr_of_depots':nbr_of_depots_sql,
+                 'transport_rates_hist_load_counts':trans_load_counts_sql,
+                 'transport_rates_hist_costs':trans_costs_sql,
+                 'transport_load_size':trans_load_size_sql}
+
+data_warehouse_data = pull_data_from_data_warehouse(sql_name_dict)
     
 # Pull data from Cosmic Frog.
 tables_we_want  = ['customerdemand',
@@ -150,22 +164,6 @@ tables_we_want  = ['customerdemand',
                    'warehousingpolicies',
                    ]
 cosmic_frog_data = pull_data_from_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, tables_we_want)
-
-
-# Pull data from PECO's data warehouse.
-# Update transportation SQL with SCAC to Carrier Type mapping.
-print("\nAdding SCAC codes to transportation SQL statements...")
-trans_load_counts_sql = scac_sql_preprocessing(trans_load_counts_sql_raw, excel_data['SCAC Types'])
-trans_costs_sql = scac_sql_preprocessing(trans_costs_sql_raw, excel_data['SCAC Types'])
-
-sql_name_dict = {'tbl_tab_Location':tbl_tab_Location_sql,
-                 'nbr_of_depots':nbr_of_depots_sql,
-                 'transport_rates_hist_load_counts':trans_load_counts_sql,
-                 'transport_rates_hist_costs':trans_costs_sql,
-                 'transport_load_size':trans_load_size_sql}
-
-data_warehouse_data = pull_data_from_data_warehouse(sql_name_dict)
-
 
 
 # Cosmic Frog Data
@@ -603,7 +601,7 @@ grp['status'] = 'ADDED'
 grp['notes'] = 'ADDED'
 
 # Note: Can't use DataFrame.update for groups, as the primary keys of dataset are what is being 
-# updated. Need to reform the Groups dataframe.
+# updated. Need to make a new Groups dataframe.
 cond = groups['groupname'].isin(['SplitSource_Distributor_KeepSingleSource',
                                  'SplitSource_Distributor_AllowToMultiSource',
                                  'SplitSource_Renter_KeepSingleSource',
@@ -1078,65 +1076,164 @@ lblt.rename(columns={'CostPerLoadAvg':'histrate', 'SCAC':'scac', 'Type':'scaccar
 
 # Update rates in transportationpolicies based on data in lblt.
 # NOTE: Need to add a new column to transportationpolicies (rfq_rate).
-cols = ['originname', 'destinationname', 'oloccode','dloccode', 'marketrate', 'histrate', 
-        'rateused', 'fixedcost', 'scac', 'scaccarriertype', 'cpu', 'unitcost', 'dutyrate_tbf', 
+cols = ['originname','productname','destinationname','ocountry','dcountry','oloccode','dloccode',
+        'histrate','marketrate','rateused','fixedcost','scac','scaccarriertype','cpu','unitcost',
         'dutyrate']
 tps = transportationpolicies[cols].copy()
 
-# =============================================================================
-# Create a workflow to do the following:
-#     - Create an "rfq_rate" column in TransportationPolicies
-#     - Update rfq_rate with Excel data provided by Dean
-#     - Update SCAC, Carrier_Type, and histrate (CostPerLoadAvg) from lblt
-#     - Update 'rateused' according to the priority outlined below.
-# 
-# Rate priority:
-#     if carriertype = 'CPU':
-#         rateused = 0
-#     else: 
-#         RFQ => Historical (any rate that isn't 999,999) => Market (should always have a value)
-# =============================================================================
-                       
-# Create an "rfq_rate" column in TransportationPolicies and update with Excel data.
+# Reset all columns that we want to update.
+cols_to_update = [i for i in cols if i not in ['originname','destinationname','ocountry',
+                                               'dcountry','oloccode','dloccode','marketrate']]
+
+# Reset values prior to updating.
+tps[cols_to_update] = None
+tps['rfqrate'] = None     # Adding here and not above becasue currently rfqrate isn't a column in transportationpolicies.
+
+# Update oloccode and dloccode
+tps['oloccode'] = tps['originname'].str[-5:]
+tps['dloccode'] = tps['destinationname'].str[-5:]
+
+# Get rfqrate from Excel input data.
 trans_rfq_rates = excel_data['Trans RFQ Rates'].copy()
-trans_rfq_rates.rename(columns={'Final Rate Award':'rfq_rate'}, inplace=True)
+trans_rfq_rates.rename(columns={'Final Rate Award':'rfqrate'}, inplace=True)
 trans_rfq_rates['oloccode'] = trans_rfq_rates['Lane Name'].str[0:5]
 trans_rfq_rates['dloccode'] = trans_rfq_rates['Lane Name'].str[-5:]
 
-cols = ['oloccode', 'dloccode', 'rfq_rate']
-tps = tps.merge(trans_rfq_rates[cols], how='left', on=['oloccode', 'dloccode'])
+cols = ['oloccode', 'dloccode', 'rfqrate']
+tps = tps.merge(trans_rfq_rates[cols], how='left', on=['oloccode', 'dloccode'], suffixes=('_drop', ''))
+tps.drop(columns=[c for c in tps.columns if '_drop' in c], inplace=True)
 
 # Update histrate, scac, scaccarriertype, and cpu
 cols = ['originname', 'destinationname', 'histrate', 'scac', 'scaccarriertype']
 tps = tps.merge(lblt[cols], how='left', on=['originname', 'destinationname'], suffixes=('_drop', ''))
+tps.drop(columns=[c for c in tps.columns if '_drop' in c], inplace=True)
 
+# =============================================================================
+# Rate priority:
+#     if carriertype = 'CPU':
+#         fixedcost = 0
+#         rateused = 'CPU'
+#         cpu = 'C'
+# 
+#     else: 
+#         'D' if carriertype = 'Dedicated' else None
+#         fixedcost = rfqrate => histrate => Market (should always have a value)
+#         rateused based on fixedcost selection
+# =============================================================================
 
-t=tps.head(10000)
-
-
-# Choose
-tps['histrate'] = tps['histrate'].replace('',999999).astype(float)
-tps['rfq_rate'] = tps['rfq_rate'].astype(float)
+tps['histrate'] = tps['histrate'].astype(float)
+tps['rfqrate'] = tps['rfqrate'].astype(float)
 tps['marketrate'] = tps['marketrate'].astype(float)
 
+# Set rates for CPUs
+cpu = tps['scaccarriertype']=='CPU'
+tps.loc[cpu, ['rateused', 'fixedcost', 'cpu']] = ['CPU', 0, 'C']
+
+# Set cpu flag for dedicated.
+ded = tps['scaccarriertype']=='Dedicated'
+tps.loc[ded, 'cpu'] = 'D'
+
 # Choose the appropriate rate to use.
-fake_hst = tps['histrate']==999999
-tps.loc[ fake_hst, 'rateused'] = tps[['rfq_rate', 'marketrate']].bfill(axis=1).iloc[:,0]
-tps.loc[~fake_hst, 'rateused'] = tps[['rfq_rate', 'histrate', 'marketrate']].bfill(axis=1).iloc[:,0]
+# Use RFQ rate.
+rfq = ~tps['rfqrate'].isna()
+tps.loc[~cpu & rfq, 'fixedcost'] = tps['rfqrate']
+tps.loc[~cpu & rfq, 'rateused'] = 'rfqrate'
 
-# =============================================================================
-# # Check
-# tps.loc[tps['rateused']==tps['rfq_rate'],['rfq_rate', 'histrate', 'marketrate']].shape   # 40
-# tps.loc[tps['rateused']==tps['histrate'],['rfq_rate', 'histrate', 'marketrate']].shape   # 767,023
-# tps.loc[tps['rateused']==tps['marketrate'],['rfq_rate', 'histrate', 'marketrate']].shape # 178,815
-# 
-# t_r = tps.loc[tps['rateused']==tps['rfq_rate'],['rfq_rate', 'histrate', 'marketrate']].head(10)   # Good
-# t_h = tps.loc[tps['rateused']==tps['histrate'],['rfq_rate', 'histrate', 'marketrate']].head(10)   # Lots of 0's... Is that OK?
-# t_m = tps.loc[tps['rateused']==tps['marketrate'],['rfq_rate', 'histrate', 'marketrate']].head(10) # Good
-# 
-# 
-# t_h2 = tps[tps['rateused']==tps['histrate']].head(100)
-# =============================================================================
+# Use historical rate.
+hst = ~tps['histrate'].isna()
+tps.loc[~cpu & ~rfq & hst, 'fixedcost'] = tps['histrate']
+tps.loc[~cpu & ~rfq & hst, 'rateused'] = 'HistRate'
+
+# Use market rate.
+tps.loc[~cpu & ~rfq & ~hst, 'fixedcost'] = tps['marketrate']
+tps.loc[~cpu & ~rfq & ~hst, 'rateused'] = 'MarketRate'
+
+# Set fuel surcharge.
+tps.loc[~cpu, 'unitcost'] = Fuel_Surcharge
+
+# Set the duty rates.
+us_to_can = (tps['ocountry']=='USA') & (tps['dcountry']=='CAN')
+can_to_us = (tps['ocountry']=='CAN') & (tps['dcountry']=='USA')
+tps.loc[us_to_can, 'dutyrate'] = Duty_Rate_US_to_Canada
+tps.loc[can_to_us, 'dutyrate'] = Duty_Rate_Canada_to_US
+
+index_cols = ['originname', 'destinationname', 'productname']
+tps.set_index(index_cols, inplace=True)
+tps = tps[~tps.index.duplicated()]
+transportationpolicies.set_index(index_cols, inplace=True)
+transportationpolicies.update(tps)
+transportationpolicies.reset_index(inplace=True)
+
+### Update Customer Fulfillment Policies and Replenishment Policies using the new 
+### Transportation Policies data.
+cols = ['originname', 'destinationname', 'cpu']
+tps = transportationpolicies[cols].copy()
+tps = tps[tps['cpu'].isin(['C', 'D'])].drop_duplicates()
+
+# Customer Fulfillment Policies
+cols = ['sourcename', 'customername']
+cfp = customerfulfillmentpolicies[cols].copy().drop_duplicates()
+
+# Identify customers that have customer pickup issue lanes.
+cfp = cfp.merge(tps, how='left', left_on='customername', right_on='destinationname')
+
+# Label these customers with an "N" in front of their CPU flag.
+flag = ~cfp['cpu'].isna()
+cfp.loc[flag, 'cpudedicated'] = 'N'+cfp['cpu']
+
+# Bring in the specific CPU and dedicated lanes that are in the transportation policies.
+cfp = cfp.merge(tps, how='left', left_on=['customername', 'sourcename'], 
+                                 right_on=['destinationname', 'originname'],
+                                 suffixes=('_drop', ''))
+
+# Update these OD pairs with their CPU flag.
+flag = ~cfp['cpu'].isna()
+cfp.loc[flag, 'cpudedicated'] = cfp['cpu']
+
+# Drop unneeded columns
+cols = [c for c in cfp.columns if '_drop' in c] + ['originname', 'destinationname', 'cpu']
+cfp.drop(columns=cols, inplace=True)
+
+# Update Customer Fulfillment Policies
+index_cols = ['customername', 'sourcename']
+cfp.set_index(index_cols, inplace=True)
+cfp = cfp[~cfp.index.duplicated()]
+customerfulfillmentpolicies.set_index(index_cols, inplace=True)
+customerfulfillmentpolicies.update(cfp)
+customerfulfillmentpolicies.reset_index(inplace=True)
+
+
+# Replenishment Fulfillment Policies
+cols = ['sourcename', 'facilityname']
+rps = replenishmentpolicies[cols].copy().drop_duplicates()
+
+# Identify customers that have customer pickup return lanes.
+rps = rps.merge(tps, how='left', left_on='sourcename', right_on='originname')
+
+# Label these customers with an "N" in front of their CPU flag.
+flag = ~rps['cpu'].isna()
+rps.loc[flag, 'cpudedicated'] = 'N'+rps['cpu']
+
+# Bring in the specific CPU and dedicated lanes that are in the transportation policies.
+rps = rps.merge(tps, how='left', left_on=['facilityname', 'sourcename'], 
+                                 right_on=['destinationname', 'originname'],
+                                 suffixes=('_drop', ''))
+
+# Update these OD pairs with their CPU flag.
+flag = ~rps['cpu'].isna()
+rps.loc[flag, 'cpudedicated'] = rps['cpu']
+
+# Drop unneeded columns
+cols = [c for c in rps.columns if '_drop' in c] + ['originname', 'destinationname', 'cpu']
+rps.drop(columns=cols, inplace=True)
+
+# Update Customer Fulfillment Policies
+index_cols = ['sourcename', 'facilityname']
+rps.set_index(index_cols, inplace=True)
+rps = rps[~rps.index.duplicated()]
+replenishmentpolicies.set_index(index_cols, inplace=True)
+replenishmentpolicies.update(rps)
+replenishmentpolicies.reset_index(inplace=True)
 
 
 
@@ -1144,31 +1241,6 @@ tps.loc[~fake_hst, 'rateused'] = tps[['rfq_rate', 'histrate', 'marketrate']].bfi
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-# =============================================================================
-# Create a workflow to do the following:
-#     - Create an "rfq_rate" column in TransportationPolicies
-#     - Update rfq_rate with Excel data provided by Dean
-#     - Update 'rateused' according to the priority outlined below.
-# 
-# Rate priority:
-#    if CPU:
-#       histrate = 0, marketrate = histrate
-#    
-#    else:
-#       RFQ => Historical (any rate that isn't 999,999) => Market (should always have a value)
-# =============================================================================
 
 
 
