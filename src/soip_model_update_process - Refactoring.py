@@ -167,7 +167,7 @@ tables_we_want  = ['customerdemand',
                    'warehousingpolicies',
                    ]
 cosmic_frog_data = pull_data_from_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, tables_we_want)
-print('Done pulling data.')
+print('Done pulling data.\n')
 
 
 # Cosmic Frog Data
