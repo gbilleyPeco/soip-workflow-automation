@@ -505,7 +505,7 @@ fac['status'] = fac.apply(lambda row: label_status(row), axis=1)
 # Set existing values prior to updating.
 cols = ['fixedstartupcost', 'fixedclosingcost', 'fixedoperatingcost']
 facilities[cols] = 0
-facilities.set_index('facilityname')
+facilities.set_index('facilityname', inplace=True)
 facilities.update(fac)
 facilities.reset_index(inplace=True)
 
