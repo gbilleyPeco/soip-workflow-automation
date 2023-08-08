@@ -597,8 +597,8 @@ iss_locs.rename(columns={'customername':'membername'}, inplace=True)
 
 cols = ['membername', 'groupname', 'grouptype']
 grp = pd.concat([iss_locs[cols], ret_locs[cols]])
-grp['status'] = 'ADDED'
-grp['notes'] = 'ADDED'
+#grp['status'] = 'ADDED'   # For testing only. Comment this out.
+#grp['notes'] = 'ADDED'    # For testing only. Comment this out.
 
 # Note: Can't use DataFrame.update for groups, as the primary keys of dataset are what is being 
 # updated. Need to make a new Groups dataframe.
