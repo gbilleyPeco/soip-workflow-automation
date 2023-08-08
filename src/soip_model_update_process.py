@@ -1332,17 +1332,3 @@ def replace_data_in_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, data_to_upload):
 
 replace_data_in_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, data_to_upload)
 print('DONE!')
-
-#%% Compare original to updated dataframes.
-# (Also compare to Alteryx output.)
-
-
-
-customerfulfillmentpolicies_orig.columns
-
-for table_name, table in data_to_upload.items():
-    print(table_name)
-    print('index' in table.columns)
-
-
-
