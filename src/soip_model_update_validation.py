@@ -48,7 +48,7 @@ DUP_INDEX_FILENAME = 'duplicate_primary_keys.xlsx'
 COMPARE_FILENAME = 'dataframe_comparisons.xlsx'
 
 # Logging
-logging.basicConfig(filename='output.log', level=logging.DEBUG)
+logging.basicConfig(filename=os.path.join(OUTPUT_FOLDER, TODAY, 'output.log'), level=logging.DEBUG)
 
 ############################################# PULL DATA ############################################
 def pull_data_from_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, tables_we_want):
@@ -240,10 +240,10 @@ def main():
         if si[0]:   # If there are different primary keys.     
             logging.info('\tDifferent values for primary keys were found.')
             # Save dataframes as Excel files. 
-            si[1].to_excel(os.path.join(OUTPUT_LOCATION, DUP_INDEX_FILENAME), 
-                           sheet_name=f'{table_name}_0')
-            si[2].to_excel(os.path.join(OUTPUT_LOCATION, DUP_INDEX_FILENAME),
-                           sheet_name=f'{table_name}_1')
+            with pd.ExcelWriter(os.path.join(OUTPUT_LOCATION, DUP_INDEX_FILENAME),
+                                mode='a') as writer:
+                si[1].to_excel(writer, sheet_name=f'{table_name}_0')
+                si[2].to_excel(writer, sheet_name=f'{table_name}_1')
             continue
         
         # Now use DataFrame.compare()
@@ -256,8 +256,9 @@ def main():
             print(f'{table_name} dataframes are the same.')
         else: 
             diff = df1_.compare(df2_)
-            diff.to_excel(os.path.join(OUTPUT_LOCATION, COMPARE_FILENAME),
-                          sheet_name=f'{table_name}')
+            with pd.ExcelWriter(os.path.join(OUTPUT_LOCATION, DUP_INDEX_FILENAME),
+                                mode='a') as writer:
+                diff.to_excel(writer, sheet_name=f'{table_name}')
             comparison_dict[table_name] = diff
             
         print('\tDone.\n')
