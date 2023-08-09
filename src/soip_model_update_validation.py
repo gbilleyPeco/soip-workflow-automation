@@ -29,7 +29,7 @@ tables_we_want  = ['customerfulfillmentpolicies',
 # Imports
 import sqlalchemy as sal
 import pandas as pd
-import numpy as np
+#import numpy as np
 import warnings
 import logging
 import os
@@ -37,11 +37,11 @@ from datetime import date
 from optilogic import pioneer
 
 # Create output data directory.
-FILE_LOCATION = os.path.join('..', 'validation')
+OUTPUT_FOLDER = os.path.join('..', 'validation')
 TODAY = pd.to_datetime(date.today()).strftime('%Y-%m-%d')
-loc = os.path.join(FILE_LOCATION, TODAY)
-if not os.path.exists(loc):
-    os.mkdir(loc)
+OUTPUT_LOCATION = os.path.join(OUTPUT_FOLDER, TODAY)
+if not os.path.exists(OUTPUT_LOCATION):
+    os.mkdir(OUTPUT_LOCATION)
 
 # Names of output validation files.
 DUP_INDEX_FILENAME = 'duplicate_primary_keys.xlsx'
@@ -92,6 +92,8 @@ cf_data = {}
 for database in databases:
     cf_data[database] = pull_data_from_cosmic_frog(USER_NAME, APP_KEY, database, tables_we_want)
 
+###################################### BEGIN DATA COMPARISON  ######################################
+
 primary_keys = {'customerfulfillmentpolicies':['customername', 'productname', 'sourcename'],
                 'customers':['customername'],
                 'facilities':['facilityname'],
@@ -119,9 +121,6 @@ paired_tables = dict()
 for table_name in tables_we_want:
     paired_tables[table_name] = (cf_data[databases[0]][table_name], cf_data[databases[1]][table_name])
 
-# Start very high level:    
-#     - Check for differences between the column names, counts.
-#     - Check for differences in row counts.
 
 def col_names(df1, df2):
 # =============================================================================
@@ -240,8 +239,11 @@ def main():
         si = same_index(df1, df2, keys)
         if si[0]:   # If there are different primary keys.     
             logging.info('\tDifferent values for primary keys were found.')
-            logging.info(f'\tdf1 contains : {si[1].to_string()}')
-            logging.info(f'\tdf2 contains : {si[2].to_string()}')
+            # Save dataframes as Excel files. 
+            si[1].to_excel(os.path.join(OUTPUT_LOCATION, DUP_INDEX_FILENAME), 
+                           sheet_name=f'{table_name}_0')
+            si[2].to_excel(os.path.join(OUTPUT_LOCATION, DUP_INDEX_FILENAME),
+                           sheet_name=f'{table_name}_1')
             continue
         
         # Now use DataFrame.compare()
@@ -250,8 +252,14 @@ def main():
         df1_ = prep_for_compare(df1, keys)
         df2_ = prep_for_compare(df2, keys)
         print('\tComparing dataframes...')
-        if df1_.equals(df2_): print(f'{table_name} dataframes are the same.')
-        else: comparison_dict[table_name] = df1_.compare(df2_)
+        if df1_.equals(df2_): 
+            print(f'{table_name} dataframes are the same.')
+        else: 
+            diff = df1_.compare(df2_)
+            diff.to_excel(os.path.join(OUTPUT_LOCATION, COMPARE_FILENAME),
+                          sheet_name=f'{table_name}')
+            comparison_dict[table_name] = diff
+            
         print('\tDone.\n')
         
     return comparison_dict
@@ -263,29 +271,6 @@ def main():
 res = main()
 
 
-
-#%% Devlop logging output.
-
-table_name = 'groups'
-dataframe_tuple = paired_tables[table_name]
-keys = primary_keys[table_name]
-
-print(f'Comparing {table_name} dataframes.')
-df1 = dataframe_tuple[0]
-df2 = dataframe_tuple[1]
-
-# "Simple" checks.
-cn = col_names(df1, df2)
-if cn[0]:   # If there are different column names
-    print('\tDifferent column names were found.')
-    print(f'\tdf1 contains : {cn[1]}')
-    print(f'\tdf2 contains : {cn[2]}')
-
-
-rc = row_counts(df1, df2)
-if rc:      # If there are different row counts
-    print('\tDifferent row counts were found.')
-    print(f'\tdf1 has {len(df1)} rows, df2 has {len(df2)} rows.')
 
 
 
