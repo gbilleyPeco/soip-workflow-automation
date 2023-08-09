@@ -4288,3 +4288,25 @@ DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): api.optilogic.ap
 DEBUG:urllib3.connectionpool:https://api.optilogic.app:443 "GET /v0/storage HTTP/1.1" 200 31895
 DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): api.optilogic.app:443
 DEBUG:urllib3.connectionpool:https://api.optilogic.app:443 "GET /v0/storage/PECO%202023-08%20SOIP%20Opt%20copy%202/connection-string HTTP/1.1" 200 1558
+INFO:root:Comparing customerfulfillmentpolicies dataframes.
+INFO:root:	Different row counts were found.
+INFO:root:	df1 has 509936 rows, df2 has 0 rows.
+INFO:root:Comparing customers dataframes.
+INFO:root:Comparing customerfulfillmentpolicies dataframes.
+INFO:root:	Different row counts were found.
+INFO:root:	df1 has 509936 rows, df2 has 0 rows.
+INFO:root:Comparing customers dataframes.
+INFO:root:Comparing facilities dataframes.
+INFO:root:Comparing groups dataframes.
+INFO:root:	Different values for primary keys were found.
+INFO:root:Comparing inventoryconstraints dataframes.
+INFO:root:	Different values for primary keys were found.
+INFO:root:Comparing inventorypolicies dataframes.
+INFO:root:Comparing periods dataframes.
+INFO:root:Comparing productionconstraints dataframes.
+INFO:root:	Different values for primary keys were found.
+INFO:root:Comparing productionpolicies dataframes.
+INFO:root:Comparing replenishmentpolicies dataframes.
+INFO:root:	Different values for primary keys were found.
+INFO:root:Comparing transportationpolicies dataframes.
+INFO:root:Comparing warehousingpolicies dataframes.
