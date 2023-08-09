@@ -2,19 +2,6 @@
 # The purpose of this script is to make it easier to compare differences between two Cosmic Frog models.
 # This is meant to help us validate our ETL code associated with the monthly SOIP process.
 # =============================================================================
-
-# Imports
-import sqlalchemy as sal
-import pandas as pd
-import numpy as np
-import warnings
-#import logging
-#import os
-#import sys
-from optilogic import pioneer
-
-
-
 ############################################ USER INPUTS ###########################################
 USER_NAME = 'graham.billey'
 APP_KEY = 'op_NWQ3YjQ0NjktNTBjOC00M2JkLWE4NWEtNjM1NDBmODA5ODEw'
@@ -36,9 +23,32 @@ tables_we_want  = ['customerfulfillmentpolicies',
                    'warehousingpolicies',
                    ]
 
-########################################## SET UP LOGGING ##########################################
-# Is this needed?
-#logging.basicConfig(filename='output.log')
+
+
+########################################## IMPORTS, SETUP ##########################################
+# Imports
+import sqlalchemy as sal
+import pandas as pd
+import numpy as np
+import warnings
+import logging
+import os
+import date
+from optilogic import pioneer
+
+# Create output data directory.
+FILE_LOCATION = os.path.join('..', 'validation')
+TODAY = pd.to_datetime(date.today()).strftime('%Y-%m-%d')
+loc = os.path.join(FILE_LOCATION, TODAY)
+if not os.path.exists(loc):
+    os.mkdir(loc)
+
+# Names of output validation files.
+DUP_INDEX_FILENAME = 'duplicate_primary_keys.xlsx'
+COMPARE_FILENAME = 'dataframe_comparisons.xlsx'
+
+# Logging
+logging.basicConfig(filename='output.log', level=logging.DEBUG)
 
 ############################################# PULL DATA ############################################
 def pull_data_from_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, tables_we_want):
@@ -84,47 +94,7 @@ cf_data = {}
 for database in databases:
     cf_data[database] = pull_data_from_cosmic_frog(USER_NAME, APP_KEY, database, tables_we_want)
 
-#%%
 
-
-# =============================================================================
-# Ideas:
-# 
-# Start very high level, then move into more and more detail.    
-#     - Check for differences between the column names, counts.
-#     - Check for differences in row counts.
-#     
-# Group each table by primary key - look at group sizes.
-#     - May be >1 if multiple rows are set to 'Exclude'
-#     
-# If table shapes are the same (including primary key group sizes):
-#     - Use df.compare()
-#     
-# 
-# =============================================================================
-
-# =============================================================================
-# # Compare differences between dataframes.
-# df1 = pd.DataFrame(
-#     {
-#         "col1": ["a", "a", "b", "b", "a"],
-#         "col2": [1.0, 2.0, 3.0, np.nan, 5.0],
-#         "col3": [1.0, 2.0, 3.0, 4.0, 5.0]
-#     },
-#     columns=["col1", "col2", "col3"],
-# )
-# 
-# df2 = df1.copy()
-# df2.loc[0, 'col1'] = 'c'
-# df2.loc[2, 'col3'] = 4.0
-# 
-# res = df1.compare(df2, result_names=('df1', 'df2'), align_axis=1, keep_equal=False)
-# =============================================================================
-
-
-
-
-#%% Development
 primary_keys = {'customerfulfillmentpolicies':['customername', 'productname', 'sourcename'],
                 'customers':['customername'],
                 'facilities':['facilityname'],
@@ -148,10 +118,10 @@ primary_keys = {'customerfulfillmentpolicies':['customername', 'productname', 's
                    }
 
 
+# Create a dictionary of tuples containing the dataframes we want to compare.
 paired_tables = dict()
-
-for tablename in tables_we_want:
-    paired_tables[tablename] = (cf_data[databases[0]][tablename], cf_data[databases[1]][tablename])
+for table_name in tables_we_want:
+    paired_tables[table_name] = (cf_data[databases[0]][table_name], cf_data[databases[1]][table_name])
 
 
 # Start very high level:    
@@ -168,32 +138,30 @@ def col_names(df1, df2):
 #         A list of the columns in df1 that are not in df2.
 #         A list of the columns in df2 that are not in df1.
 # =============================================================================
-
     c1_not_c2 = [c for c in df1.columns if c not in df2.columns]
     c2_not_c1 = [c for c in df2.columns if c not in df1.columns]
     diff_count = len(c1_not_c2) + len(c2_not_c1)
-    
     return diff_count, c1_not_c2, c2_not_c1
 
-# =============================================================================
-# # Facilities.
-# df1 = paired_tables['facilities'][0]
-# df2 = paired_tables['facilities'][1]
-# fac_col_names = col_names(df1, df2)   # Returns (0, [], [])
-# =============================================================================
-
-
 def row_counts(df1, df2):
+# =============================================================================
+# This function returns the differences in row counts between df1 and df2. Although this check is 
+# trivial and could be implemented in the main code without being defined externally, I 
+# left it as a function in case we want to add additional logic to it later.
+# =============================================================================
     diff_count = len(df1) - len(df2)
     return diff_count
 
-# =============================================================================
-# fac_row_counts = row_counts(df1, df2)   # Returns 0.
-# =============================================================================
+
 
 
 def same_index(df1, df2, keys):
-    
+# =============================================================================
+# In order to use DataFrame.compare(), the indexex of both dataframes have to be the same. 
+# To implement DataFrame.compare(), we set the index to be the primary keys of each dataframe.
+# The purpose of this function is to check if the indexes of both dataframes are the same, and to 
+# output the differences (if any) as DataFrames for comparison.
+# =============================================================================
     with warnings.catch_warnings():
         # NOTE: This is meant to suppress the following warning. 
         # FutureWarning: In a future version, the Index constructor will not infer numeric dtypes 
@@ -203,14 +171,33 @@ def same_index(df1, df2, keys):
         
     i1_not_i2 = merged[merged['_merge']=='left_only']
     i2_not_i1 = merged[merged['_merge']=='right_only']
-
     diff_count = len(i1_not_i2) + len(i2_not_i1)
-    
     return diff_count, i1_not_i2, i2_not_i1
 
 
 # Prep the dataframe for comparison
 def prep_for_compare(df, keys):
+# =============================================================================
+# If two dataframes have the same index, there may still be additional formatting that needs to be 
+# done in order for DataFrame.compare() to not flag false positives. 
+# 
+# From inspecting the output of DataFrame.compare(), there are false positives in numeric columns. 
+# All columns are stored as strings in the Cosmic Frog Postgres database. Many columns in df1 are 
+# reading in # as "integer-strings" (560), and many in df2 are "float-strings" (560.0) i.e. they 
+# were stored as integers or floats originally prior to being uploaded to CF. 
+# 
+# For our purposes, we do not want to force the upstream ETL process to specify datatypes for all
+# numeric columns, especially since the type isn't preserved in the Postgres database. Instead, 
+# let's try to convert all columns to float, ignoring ones that can't be converted (as they would
+# have rows with strings, like 'R_....' facility names.) Then round the data to X decimal places 
+# (2?), and compare dataframes again.
+# 
+# When testing this, another problem was found. Sometimes, empty strings, i.e. '', are randomly 
+# found in numeric columns, instead of NoneType objects. So before converting columns to floats, we 
+# will # first replace all occurrences of empty strings witn NoneType objects, in all cells of both
+# DataFrames. 
+# =============================================================================
+    
     # Replace all empty strings with None.
     df = df.replace({'':None})
     
@@ -228,93 +215,72 @@ def prep_for_compare(df, keys):
 
 
 
-# Main "comparison" function.
 
 def main():
     comparison_dict = {}
     
     for table_name, dataframe_tuple in paired_tables.items():
         print(f'Comparing {table_name} dataframes.')
+        logging.info(f'Comparing {table_name} dataframes.')
+        
         df1 = dataframe_tuple[0]
         df2 = dataframe_tuple[1]
 
         # Check for different column names.
+        print('\t\tChecking col_names...')
         cn = col_names(df1, df2)
         if cn[0]:   # If there are different column names.
-            print('\tDifferent column names were found.')
-            print(f'\tdf1 contains : {cn[1]}')
-            print(f'\tdf2 contains : {cn[2]}')
+            #print('\tDifferent column names were found.')
+            #print(f'\tdf1 contains : {cn[1]}')
+            #print(f'\tdf2 contains : {cn[2]}')
+            
             continue
         
         # Check for different row counts.
+        print('\t\tChecking row_counts...')
         rc = row_counts(df1, df2)
-        if rc:      # If there are different row counts
-            print('\tDifferent row counts were found.')
-            print(f'\tdf1 has {len(df1)} rows, df2 has {len(df2)} rows.')
+        if rc:     # If there are different row counts
+            #print('\tDifferent row counts were found.')
+            #print(f'\tdf1 has {len(df1)} rows, df2 has {len(df2)} rows.')
+            logging.info('\tDifferent row counts were found.')
+            logging.info(f'\tdf1 has {len(df1)} rows, df2 has {len(df2)} rows.')
             continue
         
         # Check for different indexes based on the primary key of each table.
+        print('\t\tChecking same_index...')
         keys = primary_keys[table_name]
         si = same_index(df1, df2, keys)
-        
         if si[0]:   # If there are different primary keys.     
-            print('\tDifferent values for primary keys were found.')
-            print(f'\tdf1 contains : {si[1]}')
-            print(f'\tdf2 contains : {si[2]}')
+            #print('\tDifferent values for primary keys were found.')
+            #print(f'\tdf1 contains : {si[1]}')
+            #print(f'\tdf2 contains : {si[2]}')
+            logging.info('\tDifferent values for primary keys were found.')
+            logging.info(f'\tdf1 contains : {si[1].to_string()}')
+            logging.info(f'\tdf2 contains : {si[2].to_string()}')
             continue
         
         
         # Now use DataFrame.compare()
         print('\tInitial checks passed.')
-        
         print('\tPreparing dataframes for df.compare()...')
         df1_ = prep_for_compare(df1, keys)
         df2_ = prep_for_compare(df2, keys)
         print('\tComparing dataframes...')
-        comparison_dict[tablename] = df1_.compare(df2_)
+        if df1_.equals(df2_): print(f'{table_name} dataframes are the same.')
+        else: comparison_dict[table_name] = df1_.compare(df2_)
         print('\tDone.\n')
         
     return comparison_dict
         
 
+
+#%%  Test main()
+
 res = main()
 
 
 
-f = res['facilities']
-
-
-
 #%% Devlop main() function.
-
-# =============================================================================
-# keys = primary_keys['facilities']
-# 
-# df1_ = df1.set_index(keys).sort_index().sort_index(axis=1)
-# df2_ = df2.set_index(keys).sort_index().sort_index(axis=1)
-# df1_.equals(df2_)   # False. Why?
-# t = df1_.compare(df2_)
-# =============================================================================
-
-# =============================================================================
-# NOTE: From inspecting t, we can see that the problem has to do with numeric columns. All columns
-# are stored as strings in the Cosmic Frog Postgres database. Many columns in df1_ are reading in 
-# as "integer-strings" (560), and many in df2_ are "float-strings" (560.0) i.e. they were stored as 
-# integers or floats originally prior to being uploaded to CF. 
-# 
-# For our purposes, we do not want to force the upstream ETL process to specify datatypes for all
-# numeric columns, especially since the type isn't preserved in the Postgres database. Instead, 
-# let's try to convert all columns to float, ignoring ones that can't be converted (as they would
-# have rows with strings, like 'R_....' facility names.) Then round the data to X decimal places 
-# (2?), and compare dataframes again.
-# 
-# When testing this, another problem was found. Sometimes, empty strings, i.e. '', are randomly found
-# in numeric columns, instead of NoneType objects. So before converting columns to floats, we will 
-# first replace all occurrences of empty strings witn NoneType objects, in all cells of both
-# DataFrames. 
-# =============================================================================
-
-
 
 table_name = 'groups'
 dataframe_tuple = paired_tables[table_name]
@@ -362,13 +328,16 @@ len(i1_not_i2) + len(i2_not_i1)
 
 res = df1_.compare(df2_)
 
+#################################################### Formatting logfile output.
 
-
-
-
-
-
-
+# Compare the facilities table.
+table_name = 'groups'
+tup = paired_tables[table_name]
+keys = primary_keys[table_name]
+df1 = tup[0]
+df2 = tup[1]
+g_si = same_index(df1, df2, keys)   # Works... Doesn't explain why facilities isn't being stored.
+g1 = g_si[1].to_string()
 
 
 #%% DataFrame.compare() examples.

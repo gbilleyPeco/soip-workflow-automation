@@ -1326,7 +1326,7 @@ def replace_data_in_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, data_to_upload):
             print(f'Uploading data to table: {table_name}...')
             if 'index' in table.columns:
                 del table['index']
-            table.to_sql(table_name, con=engine, if_exists='append', index=False)
+            table.to_sql(table_name, con=engine, if_exists='append', index=False, method='multi')
             print('\tDone.')
     
 
