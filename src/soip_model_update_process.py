@@ -1297,7 +1297,7 @@ data_to_upload  = {'customerfulfillmentpolicies':customerfulfillmentpolicies,
                    'productionpolicies':productionpolicies,
                    'replenishmentpolicies':replenishmentpolicies,
                    'transportationpolicies':transportationpolicies,
-                   'warehousingpolicies':warehousingpolicies
+                   'warehousingpolicies':warehousingpolicies,
                    }
 
 

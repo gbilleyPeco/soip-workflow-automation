@@ -2,6 +2,7 @@
 # The purpose of this script is to make it easier to compare differences between two Cosmic Frog models.
 # This is meant to help us validate our ETL code associated with the monthly SOIP process.
 # =============================================================================
+
 ############################################ USER INPUTS ###########################################
 USER_NAME = 'graham.billey'
 APP_KEY = 'op_NWQ3YjQ0NjktNTBjOC00M2JkLWE4NWEtNjM1NDBmODA5ODEw'
@@ -24,7 +25,6 @@ tables_we_want  = ['customerfulfillmentpolicies',
                    ]
 
 
-
 ########################################## IMPORTS, SETUP ##########################################
 # Imports
 import sqlalchemy as sal
@@ -33,7 +33,7 @@ import numpy as np
 import warnings
 import logging
 import os
-import date
+from datetime import date
 from optilogic import pioneer
 
 # Create output data directory.
@@ -85,15 +85,12 @@ def pull_data_from_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, tables_we_want):
     
     return data_dict
 
- 
-
 # Create a dictionary to store the data.
 cf_data = {}
            
 # Pull data from Cosmic Frog.
 for database in databases:
     cf_data[database] = pull_data_from_cosmic_frog(USER_NAME, APP_KEY, database, tables_we_want)
-
 
 primary_keys = {'customerfulfillmentpolicies':['customername', 'productname', 'sourcename'],
                 'customers':['customername'],
@@ -117,12 +114,10 @@ primary_keys = {'customerfulfillmentpolicies':['customername', 'productname', 's
                 'warehousingpolicies':['facilityname', 'productname'],
                    }
 
-
 # Create a dictionary of tuples containing the dataframes we want to compare.
 paired_tables = dict()
 for table_name in tables_we_want:
     paired_tables[table_name] = (cf_data[databases[0]][table_name], cf_data[databases[1]][table_name])
-
 
 # Start very high level:    
 #     - Check for differences between the column names, counts.
@@ -152,9 +147,6 @@ def row_counts(df1, df2):
     diff_count = len(df1) - len(df2)
     return diff_count
 
-
-
-
 def same_index(df1, df2, keys):
 # =============================================================================
 # In order to use DataFrame.compare(), the indexex of both dataframes have to be the same. 
@@ -173,7 +165,6 @@ def same_index(df1, df2, keys):
     i2_not_i1 = merged[merged['_merge']=='right_only']
     diff_count = len(i1_not_i2) + len(i2_not_i1)
     return diff_count, i1_not_i2, i2_not_i1
-
 
 # Prep the dataframe for comparison
 def prep_for_compare(df, keys):
@@ -230,18 +221,15 @@ def main():
         print('\t\tChecking col_names...')
         cn = col_names(df1, df2)
         if cn[0]:   # If there are different column names.
-            #print('\tDifferent column names were found.')
-            #print(f'\tdf1 contains : {cn[1]}')
-            #print(f'\tdf2 contains : {cn[2]}')
-            
+            logging.info('\tDifferent column names were found.')
+            logging.info(f'\tdf1 contains : {cn[1]}')
+            logging.info(f'\tdf2 contains : {cn[2]}')
             continue
         
         # Check for different row counts.
         print('\t\tChecking row_counts...')
         rc = row_counts(df1, df2)
         if rc:     # If there are different row counts
-            #print('\tDifferent row counts were found.')
-            #print(f'\tdf1 has {len(df1)} rows, df2 has {len(df2)} rows.')
             logging.info('\tDifferent row counts were found.')
             logging.info(f'\tdf1 has {len(df1)} rows, df2 has {len(df2)} rows.')
             continue
@@ -251,14 +239,10 @@ def main():
         keys = primary_keys[table_name]
         si = same_index(df1, df2, keys)
         if si[0]:   # If there are different primary keys.     
-            #print('\tDifferent values for primary keys were found.')
-            #print(f'\tdf1 contains : {si[1]}')
-            #print(f'\tdf2 contains : {si[2]}')
             logging.info('\tDifferent values for primary keys were found.')
             logging.info(f'\tdf1 contains : {si[1].to_string()}')
             logging.info(f'\tdf2 contains : {si[2].to_string()}')
             continue
-        
         
         # Now use DataFrame.compare()
         print('\tInitial checks passed.')
@@ -280,10 +264,11 @@ res = main()
 
 
 
-#%% Devlop main() function.
+#%% Devlop logging output.
 
 table_name = 'groups'
 dataframe_tuple = paired_tables[table_name]
+keys = primary_keys[table_name]
 
 print(f'Comparing {table_name} dataframes.')
 df1 = dataframe_tuple[0]
@@ -302,87 +287,13 @@ if rc:      # If there are different row counts
     print('\tDifferent row counts were found.')
     print(f'\tdf1 has {len(df1)} rows, df2 has {len(df2)} rows.')
 
-    
-#################################################### Check for "new" rows using index values.
-# Problem: Index values lose the coresponding column name.
-keys = primary_keys[table_name]
-
-df1_ = prep_for_compare(df1, keys)
-df2_ = prep_for_compare(df2, keys)
-
-# Check for identical Indexes.
-i1_not_i2 = [i for i in df1_.index if i not in df2_.index]
-i2_not_i1 = [i for i in df2_.index if i not in df1_.index]
-
-
-#################################################### Check for "new" rows using dataframe rows.
-
-merged = df1[keys].merge(df2[keys], how='outer', indicator=True)
-i1_not_i2 = merged[merged['_merge']=='left_only']
-i2_not_i1 = merged[merged['_merge']=='right_only']
-
-len(i1_not_i2) + len(i2_not_i1)
 
 
 
-
-res = df1_.compare(df2_)
-
-#################################################### Formatting logfile output.
-
-# Compare the facilities table.
-table_name = 'groups'
-tup = paired_tables[table_name]
-keys = primary_keys[table_name]
-df1 = tup[0]
-df2 = tup[1]
-g_si = same_index(df1, df2, keys)   # Works... Doesn't explain why facilities isn't being stored.
-g1 = g_si[1].to_string()
 
 
 #%% DataFrame.compare() examples.
 
-df1 = pd.DataFrame(
-    {
-        "col1": ["a", "a", "b", "b", "a"],
-        "col2": [1.0, 2.0, 3.0, np.nan, 5.0],
-        "col3": [1.0, 2.0, 3.0, 4.0, 5.0]
-    },
-    columns=["col1", "col2", "col3"],
-)
-
-df2 = df1.copy()
-df2.loc[0, 'col1'] = 'c'
-df2.loc[2, 'col3'] = 4.0
-
-res_1_2 = df1.compare(df2, result_names=('df1', 'df2'), align_axis=1, keep_equal=False)
-
-
-df3 = pd.DataFrame(
-    {
-        "col1": ["a", "a", "b", "b", "a"],
-        "col2": [2.0, 1.0, 3.0, np.nan, 5.0],
-        "col3": [2.0, 1.0, 3.0, 4.0, 5.0]
-    },
-    columns=["col1", "col2", "col3"],
-)
-
-res_1_3 = df1.compare(df3, result_names=('df1', 'df2'), align_axis=1, keep_equal=False)
-
-df1_s = df1.sort_values(list(df1.columns)).reset_index(drop=True)
-df3_s = df3.sort_values(list(df3.columns)).reset_index(drop=True)
-res_1_3_sorted = df1_s.compare(df3_s, result_names=('df1', 'df2'), align_axis=1, keep_equal=False)  # Works
-
-
-df1_s_i = df1.sort_values(list(df1.columns), ignore_index=True)
-df3_s_i = df3.sort_values(list(df3.columns), ignore_index=True)
-res_1i_3i_sorted = df1_s_i.compare(df3_s_i, result_names=('df1', 'df2'), align_axis=1, keep_equal=False)  # Works
-
-
-
-p1 = cf_data['PECO 2023-08 SOIP Opt copy 1']['periods']
-p2 = cf_data['PECO 2023-08 SOIP Opt copy 2']['periods'] # Should be the same
-delta = p1.compare(p2) # Pass. Returns an empty DataFrame.
 
 
 
@@ -434,7 +345,50 @@ delta = p1.compare(p2) # Pass. Returns an empty DataFrame.
 
 
 
-
+# =============================================================================
+# DataFrame.compare() examples.
+# df1 = pd.DataFrame(
+#     {
+#         "col1": ["a", "a", "b", "b", "a"],
+#         "col2": [1.0, 2.0, 3.0, np.nan, 5.0],
+#         "col3": [1.0, 2.0, 3.0, 4.0, 5.0]
+#     },
+#     columns=["col1", "col2", "col3"],
+# )
+# 
+# df2 = df1.copy()
+# df2.loc[0, 'col1'] = 'c'
+# df2.loc[2, 'col3'] = 4.0
+# 
+# res_1_2 = df1.compare(df2, result_names=('df1', 'df2'), align_axis=1, keep_equal=False)
+# 
+# 
+# df3 = pd.DataFrame(
+#     {
+#         "col1": ["a", "a", "b", "b", "a"],
+#         "col2": [2.0, 1.0, 3.0, np.nan, 5.0],
+#         "col3": [2.0, 1.0, 3.0, 4.0, 5.0]
+#     },
+#     columns=["col1", "col2", "col3"],
+# )
+# 
+# res_1_3 = df1.compare(df3, result_names=('df1', 'df2'), align_axis=1, keep_equal=False)
+# 
+# df1_s = df1.sort_values(list(df1.columns)).reset_index(drop=True)
+# df3_s = df3.sort_values(list(df3.columns)).reset_index(drop=True)
+# res_1_3_sorted = df1_s.compare(df3_s, result_names=('df1', 'df2'), align_axis=1, keep_equal=False)  # Works
+# 
+# 
+# df1_s_i = df1.sort_values(list(df1.columns), ignore_index=True)
+# df3_s_i = df3.sort_values(list(df3.columns), ignore_index=True)
+# res_1i_3i_sorted = df1_s_i.compare(df3_s_i, result_names=('df1', 'df2'), align_axis=1, keep_equal=False)  # Works
+# 
+# 
+# 
+# p1 = cf_data['PECO 2023-08 SOIP Opt copy 1']['periods']
+# p2 = cf_data['PECO 2023-08 SOIP Opt copy 2']['periods'] # Should be the same
+# delta = p1.compare(p2) # Pass. Returns an empty DataFrame.
+# =============================================================================
 
 
 

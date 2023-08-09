@@ -4276,3 +4276,15 @@ Columns: [facilityname, productname, sourcename, _merge]
 Index: []
 INFO:root:Comparing transportationpolicies dataframes.
 INFO:root:Comparing warehousingpolicies dataframes.
+DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): api.optilogic.app:443
+DEBUG:urllib3.connectionpool:https://api.optilogic.app:443 "GET /v0/jobs-dashboard/jobs?maxResults=1 HTTP/1.1" 200 843
+DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): api.optilogic.app:443
+DEBUG:urllib3.connectionpool:https://api.optilogic.app:443 "GET /v0/storage HTTP/1.1" 200 31895
+DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): api.optilogic.app:443
+DEBUG:urllib3.connectionpool:https://api.optilogic.app:443 "GET /v0/storage/PECO%202023-08%20SOIP%20Opt%20copy%201/connection-string HTTP/1.1" 200 1558
+DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): api.optilogic.app:443
+DEBUG:urllib3.connectionpool:https://api.optilogic.app:443 "GET /v0/jobs-dashboard/jobs?maxResults=1 HTTP/1.1" 200 843
+DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): api.optilogic.app:443
+DEBUG:urllib3.connectionpool:https://api.optilogic.app:443 "GET /v0/storage HTTP/1.1" 200 31895
+DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): api.optilogic.app:443
+DEBUG:urllib3.connectionpool:https://api.optilogic.app:443 "GET /v0/storage/PECO%202023-08%20SOIP%20Opt%20copy%202/connection-string HTTP/1.1" 200 1558
