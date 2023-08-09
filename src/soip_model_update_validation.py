@@ -46,7 +46,7 @@ if not os.path.exists(OUTPUT_LOCATION):
 # Names of output validation files.
 DUP_INDEX_FILENAME = 'duplicate_primary_keys.xlsx'
 COMPARE_FILENAME = 'dataframe_comparisons.xlsx'
-
+  
 # Logging
 logging.basicConfig(filename=os.path.join(OUTPUT_FOLDER, TODAY, 'output.log'), level=logging.DEBUG)
 
@@ -240,10 +240,14 @@ def main():
         if si[0]:   # If there are different primary keys.     
             logging.info('\tDifferent values for primary keys were found.')
             # Save dataframes as Excel files. 
-            with pd.ExcelWriter(os.path.join(OUTPUT_LOCATION, DUP_INDEX_FILENAME),
-                                mode='a') as writer:
-                si[1].to_excel(writer, sheet_name=f'{table_name}_0')
-                si[2].to_excel(writer, sheet_name=f'{table_name}_1')
+            
+            # NEED TO GET THSI TO WORK
+            #with pd.ExcelWriter(os.path.join(OUTPUT_LOCATION, DUP_INDEX_FILENAME),
+            #                    mode='a') as writer:
+            #    si[1].to_excel(writer, sheet_name=f'{table_name}_0')
+            #    si[2].to_excel(writer, sheet_name=f'{table_name}_1')
+            
+            
             continue
         
         # Now use DataFrame.compare()
@@ -256,11 +260,15 @@ def main():
             print(f'{table_name} dataframes are the same.')
         else: 
             diff = df1_.compare(df2_)
-            with pd.ExcelWriter(os.path.join(OUTPUT_LOCATION, DUP_INDEX_FILENAME),
-                                mode='a') as writer:
-                diff.to_excel(writer, sheet_name=f'{table_name}')
+            
+            # NEED TO GET THSI TO WORK
+            #with pd.ExcelWriter(os.path.join(OUTPUT_LOCATION, COMPARE_FILENAME),
+            #                    mode='a') as writer:
+            #    diff.to_excel(writer, sheet_name=f'{table_name}')
+            
             comparison_dict[table_name] = diff
             
+        logging.info('\n\n-----------------------------------------------------------------------\n\n')
         print('\tDone.\n')
         
     return comparison_dict

@@ -44,8 +44,8 @@ from sql_statements import tbl_tab_Location_sql, nbr_of_depots_sql, \
     trans_load_size_sql, trans_load_counts_sql_raw, trans_costs_sql_raw
     
 # Import User-Input data.
-from user_inputs import USER_NAME, APP_KEY, DB_NAME, RepairCapacityNotes, MinInventoryNotes, \
-    DepotCapacityNotes, BeginningInvNotes, ReturnsProductionNotes, \
+from user_inputs import USER_NAME, APP_KEY, INPUT_DB_NAME, OUTPUT_DB_NAME, RepairCapacityNotes, \
+    MinInventoryNotes, DepotCapacityNotes, BeginningInvNotes, ReturnsProductionNotes, \
     ProductionPolicyRepairBOMName, NewPalletCost, Avg_Load_Size_Issues, Avg_Load_Size_Returns, \
     Avg_Load_Size_Transfers, Fuel_Surcharge, Duty_Rate_US_to_Canada, Duty_Rate_Canada_to_US 
     
@@ -54,7 +54,7 @@ from excel_data_validation import pull_data_from_excel
 
 # Define functions to pull data from Cosmic Frog and PECO's data warehouse.
 
-def pull_data_from_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, tables_we_want):
+def pull_data_from_cosmic_frog(USER_NAME, APP_KEY, INPUT_DB_NAME, tables_we_want):
     # Note: This syntax is compatible with SQLAlchemy 2.0.
     print('\nPulling data from Cosmic Frog...')
     
@@ -63,7 +63,7 @@ def pull_data_from_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, tables_we_want):
     
         # Code that makes connection to the Cosmic Frog database.
         api = pioneer.Api(auth_legacy = False, un=USER_NAME, appkey=APP_KEY)
-        connection_str = api.sql_connection_info(DB_NAME)
+        connection_str = api.sql_connection_info(INPUT_DB_NAME)
         #connection_string = 'postgresql://'+connection_str['raw']['user']+':'+ \
         #    connection_str['raw']['password']+'@'+connection_str['raw']['host']+':'+ \
         #    str(connection_str['raw']['port'])+'/'+connection_str['raw']['dbname']+'?sslmode=require'
@@ -166,7 +166,7 @@ tables_we_want  = ['customerdemand',
                    'transportationpolicies',
                    'warehousingpolicies',
                    ]
-cosmic_frog_data = pull_data_from_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, tables_we_want)
+cosmic_frog_data = pull_data_from_cosmic_frog(USER_NAME, APP_KEY, INPUT_DB_NAME, tables_we_want)
 print('Done pulling data.\n')
 
 
@@ -1301,7 +1301,7 @@ data_to_upload  = {'customerfulfillmentpolicies':customerfulfillmentpolicies,
                    }
 
 
-def replace_data_in_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, data_to_upload):
+def replace_data_in_cosmic_frog(USER_NAME, APP_KEY, OUTPUT_DB_NAME, data_to_upload):
     # Note: This syntax is compatible with SQLAlchemy 2.0.
     print('Connecting to Cosmic Frog to upload data.')
     
@@ -1312,7 +1312,7 @@ def replace_data_in_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, data_to_upload):
         api = pioneer.Api(auth_legacy=False, un=USER_NAME, appkey=APP_KEY)
 
         ### Create connection to the model database
-        connection_str = api.sql_connection_info(DB_NAME)
+        connection_str = api.sql_connection_info(OUTPUT_DB_NAME)
         connection_string = connection_str['connectionStrings']['url']
         engine = sal.create_engine(connection_string)
         conn = engine.connect()
@@ -1326,9 +1326,9 @@ def replace_data_in_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, data_to_upload):
             print(f'Uploading data to table: {table_name}...')
             if 'index' in table.columns:
                 del table['index']
-            table.to_sql(table_name, con=engine, if_exists='append', index=False, method='multi')
+            table.to_sql(table_name, con=engine, if_exists='append', index=False)
             print('\tDone.')
     
 
-replace_data_in_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, data_to_upload)
+replace_data_in_cosmic_frog(USER_NAME, APP_KEY, OUTPUT_DB_NAME, data_to_upload)
 print('DONE!')
