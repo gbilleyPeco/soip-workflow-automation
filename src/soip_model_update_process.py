@@ -29,7 +29,13 @@ import numpy as np
 import warnings
 import os
 import sys
+import csv
+import time
 from optilogic import pioneer
+from io import StringIO
+
+# Start time.
+t0=time.time()
 
 # Set display format for pandas.
 pd.options.display.float_format = "{:,.2f}".format
@@ -185,21 +191,23 @@ replenishmentpolicies = cosmic_frog_data['replenishmentpolicies'].copy()
 transportationpolicies = cosmic_frog_data['transportationpolicies'].copy()
 warehousingpolicies = cosmic_frog_data['warehousingpolicies'].copy()
 
-# NOTE: We will change this during development and compare to the unedited dataframes. 
-#       Remove this section after development is complete.
-customerdemand_orig = cosmic_frog_data['customerdemand'].copy()
-customerfulfillmentpolicies_orig = cosmic_frog_data['customerfulfillmentpolicies'].copy()
-customers_orig = cosmic_frog_data['customers'].copy()
-facilities_orig = cosmic_frog_data['facilities'].copy()
-groups_orig = cosmic_frog_data['groups'].copy()
-inventoryconstraints_orig = cosmic_frog_data['inventoryconstraints'].copy()
-inventorypolicies_orig = cosmic_frog_data['inventorypolicies'].copy()
-periods_orig = cosmic_frog_data['periods'].copy()
-productionconstraints_orig = cosmic_frog_data['productionconstraints'].copy()
-productionpolicies_orig = cosmic_frog_data['productionpolicies'].copy()
-replenishmentpolicies_orig = cosmic_frog_data['replenishmentpolicies'].copy()
-transportationpolicies_orig = cosmic_frog_data['transportationpolicies'].copy()
-warehousingpolicies_orig = cosmic_frog_data['warehousingpolicies'].copy()
+# =============================================================================
+# # NOTE: We will change this during development and compare to the unedited dataframes. 
+# #       Remove this section after development is complete.
+# customerdemand_orig = cosmic_frog_data['customerdemand'].copy()
+# customerfulfillmentpolicies_orig = cosmic_frog_data['customerfulfillmentpolicies'].copy()
+# customers_orig = cosmic_frog_data['customers'].copy()
+# facilities_orig = cosmic_frog_data['facilities'].copy()
+# groups_orig = cosmic_frog_data['groups'].copy()
+# inventoryconstraints_orig = cosmic_frog_data['inventoryconstraints'].copy()
+# inventorypolicies_orig = cosmic_frog_data['inventorypolicies'].copy()
+# periods_orig = cosmic_frog_data['periods'].copy()
+# productionconstraints_orig = cosmic_frog_data['productionconstraints'].copy()
+# productionpolicies_orig = cosmic_frog_data['productionpolicies'].copy()
+# replenishmentpolicies_orig = cosmic_frog_data['replenishmentpolicies'].copy()
+# transportationpolicies_orig = cosmic_frog_data['transportationpolicies'].copy()
+# warehousingpolicies_orig = cosmic_frog_data['warehousingpolicies'].copy()
+# =============================================================================
 
 # Data Warehouse Data
 tbl_tab_Location = data_warehouse_data['tbl_tab_Location'].copy()
@@ -208,13 +216,15 @@ transport_rates_hist_load_counts = data_warehouse_data['transport_rates_hist_loa
 transport_rates_hist_costs = data_warehouse_data['transport_rates_hist_costs'].copy()
 transport_load_size = data_warehouse_data['transport_load_size'].copy()
 
-# NOTE: We will change this during development and compare to the unedited dataframes. 
-#       Remove this section after development is complete.
-tbl_tab_Location_orig = data_warehouse_data['tbl_tab_Location'].copy()
-nbr_of_depots_orig = data_warehouse_data['nbr_of_depots'].copy()
-transport_rates_hist_load_counts_orig = data_warehouse_data['transport_rates_hist_load_counts'].copy()
-transport_rates_hist_costs_orig = data_warehouse_data['transport_rates_hist_costs'].copy()
-transport_load_size_orig = data_warehouse_data['transport_load_size'].copy()
+# =============================================================================
+# # NOTE: We will change this during development and compare to the unedited dataframes. 
+# #       Remove this section after development is complete.
+# tbl_tab_Location_orig = data_warehouse_data['tbl_tab_Location'].copy()
+# nbr_of_depots_orig = data_warehouse_data['nbr_of_depots'].copy()
+# transport_rates_hist_load_counts_orig = data_warehouse_data['transport_rates_hist_load_counts'].copy()
+# transport_rates_hist_costs_orig = data_warehouse_data['transport_rates_hist_costs'].copy()
+# transport_load_size_orig = data_warehouse_data['transport_load_size'].copy()
+# =============================================================================
 
 
 #%% Subprocesses.
@@ -1300,7 +1310,36 @@ data_to_upload  = {'customerfulfillmentpolicies':customerfulfillmentpolicies,
                    'warehousingpolicies':warehousingpolicies,
                    }
 
+def psql_insert_copy(table, conn, keys, data_iter):
+    """
+    Execute SQL statement inserting data
 
+    Parameters
+    ----------
+    table : pandas.io.sql.SQLTable
+    conn : sqlalchemy.engine.Engine or sqlalchemy.engine.Connection
+    keys : list of str
+        Column names
+    data_iter : Iterable that iterates the values to be inserted
+    """
+    # gets a DBAPI connection that can provide a cursor
+    dbapi_conn = conn.connection
+    with dbapi_conn.cursor() as cur:
+        s_buf = StringIO()
+        writer = csv.writer(s_buf)
+        writer.writerows(data_iter)
+        s_buf.seek(0)
+
+        columns = ', '.join('"{}"'.format(k) for k in keys)
+        if table.schema:
+            table_name = '{}.{}'.format(table.schema, table.name)
+        else:
+            table_name = table.name
+
+        sql = 'COPY {} ({}) FROM STDIN WITH CSV'.format(
+            table_name, columns)
+        cur.copy_expert(sql=sql, file=s_buf)
+        
 def replace_data_in_cosmic_frog(USER_NAME, APP_KEY, OUTPUT_DB_NAME, data_to_upload):
     # Note: This syntax is compatible with SQLAlchemy 2.0.
     print('Connecting to Cosmic Frog to upload data.')
@@ -1326,9 +1365,9 @@ def replace_data_in_cosmic_frog(USER_NAME, APP_KEY, OUTPUT_DB_NAME, data_to_uplo
             print(f'Uploading data to table: {table_name}...')
             if 'index' in table.columns:
                 del table['index']
-            table.to_sql(table_name, con=engine, if_exists='append', index=False)
+            table.to_sql(table_name, con=engine, if_exists='append', index=False, method=psql_insert_copy)
             print('\tDone.')
     
-
 replace_data_in_cosmic_frog(USER_NAME, APP_KEY, OUTPUT_DB_NAME, data_to_upload)
-print('DONE!')
+t1=time.time()
+print(f'DONE! The program took {round((t1-t0)/60)} minutes to complete.')

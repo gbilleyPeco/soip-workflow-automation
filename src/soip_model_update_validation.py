@@ -3,13 +3,28 @@
 # This is meant to help us validate our ETL code associated with the monthly SOIP process.
 # =============================================================================
 
-############################################ USER INPUTS ###########################################
-USER_NAME = 'graham.billey'
-APP_KEY = 'op_NWQ3YjQ0NjktNTBjOC00M2JkLWE4NWEtNjM1NDBmODA5ODEw'
-databases = ['PECO 2023-08 SOIP Opt copy 1',
-             'PECO 2023-08 SOIP Opt copy 3']
-# NOTE: Currently the code isn o
+########################################## IMPORTS, SETUP ##########################################
+# Imports
+import sqlalchemy as sal
+import pandas as pd
+import warnings
+import logging
+import os
+import sys
+import time
+from datetime import date
+from optilogic import pioneer
 
+t0 = time.time()
+
+# Add project root to PATH to allow for relative imports. 
+ROOT = os.path.abspath(os.path.join('..'))
+if ROOT not in sys.path:
+    sys.path.append(ROOT)
+
+from user_inputs import USER_NAME, APP_KEY, INPUT_DB_NAME, OUTPUT_DB_NAME
+
+databases = [INPUT_DB_NAME, OUTPUT_DB_NAME]
 tables_we_want  = ['customerfulfillmentpolicies',
                    'customers',
                    'facilities',
@@ -24,18 +39,6 @@ tables_we_want  = ['customerfulfillmentpolicies',
                    'warehousingpolicies',
                    ]
 
-
-########################################## IMPORTS, SETUP ##########################################
-# Imports
-import sqlalchemy as sal
-import pandas as pd
-#import numpy as np
-import warnings
-import logging
-import os
-from datetime import date
-from optilogic import pioneer
-
 # Create output data directory.
 OUTPUT_FOLDER = os.path.join('..', 'validation')
 TODAY = pd.to_datetime(date.today()).strftime('%Y-%m-%d')
@@ -48,7 +51,7 @@ DUP_INDEX_FILENAME = 'duplicate_primary_keys.xlsx'
 #COMPARE_FILENAME = 'dataframe_comparisons.xlsx'
   
 # Logging
-logging.basicConfig(filename=os.path.join(OUTPUT_FOLDER, TODAY, 'output.log'), level=logging.DEBUG)
+logging.basicConfig(filename=os.path.join(OUTPUT_FOLDER, TODAY, 'output.log'), level=logging.INFO)
 
 ############################################# PULL DATA ############################################
 def pull_data_from_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, tables_we_want):
@@ -101,7 +104,7 @@ primary_keys = {'customerfulfillmentpolicies':['customername', 'productname', 's
                 'inventoryconstraints':['facilityname','facilitynamegroupbehavior','productname',
                                         'productnamegroupbehavior','periodname',
                                         'periodnamegroupbehavior','constrainttype',
-                                        'constraintvalue','constraintvalueuom',
+                                        'constraintvalueuom', #'constraintvalue',
                                         'consideredinventory'],
                 'inventorypolicies':['facilityname', 'productname'],
                 'periods':['periodname'],   # NOTE: The model update code doesn't change the Periods table. This is for testing.
@@ -109,7 +112,8 @@ primary_keys = {'customerfulfillmentpolicies':['customername', 'productname', 's
                                          'productnamegroupbehavior','periodname',
                                          'periodnamegroupbehavior','bomname','bomnamegroupbehavior',
                                          'processname','processnamegroupbehavior','constrainttype',
-                                         'constraintvalue','constraintvalueuom'],
+                                         'constraintvalueuom', #'constraintvalue',
+                                         ],
                 'productionpolicies':['facilityname', 'productname', 'bomname', 'processname'],
                 'replenishmentpolicies':['facilityname', 'productname', 'sourcename'],
                 'transportationpolicies':['originname', 'destinationname', 'productname', 'modename'],
@@ -148,16 +152,24 @@ def row_counts(df1, df2):
 
 def same_index(df1, df2, keys):
 # =============================================================================
-# In order to use DataFrame.compare(), the indexex of both dataframes have to be the same. 
+# In order to use DataFrame.compare(), the indexes of both dataframes have to be the same. 
 # To implement DataFrame.compare(), we set the index to be the primary keys of each dataframe.
 # The purpose of this function is to check if the indexes of both dataframes are the same, and to 
 # output the differences (if any) as DataFrames for comparison.
+#
+# After testing, we found instances in inventoryconstraints and productionconstraints where
+# index columns were numeric in nature, but sometimes stored with or without a decimal. (See the 
+# notes for prep_for_compare()). We need to apply the same conversions to the 
+# dataframes in this function, without setting the index columns. 
 # =============================================================================
+    df1 = prep_for_compare(df1, keys).reset_index()
+    df2 = prep_for_compare(df2, keys).reset_index()
+    
     with warnings.catch_warnings():
         # NOTE: This is meant to suppress the following warning. 
         # FutureWarning: In a future version, the Index constructor will not infer numeric dtypes 
         # when passed object-dtype sequences (matching Series behavior)
-        warnings.simplefilter(action='ignore', category=FutureWarning)
+        warnings.simplefilter(action='ignore', category=FutureWarning)        
         merged = df1[keys].merge(df2[keys], how='outer', indicator=True)
         
     i1_not_i2 = merged[merged['_merge']=='left_only']
@@ -208,8 +220,10 @@ def main():
     comparison_dict = {}
     
     for table_name, dataframe_tuple in paired_tables.items():
-        print(f'Comparing {table_name} dataframes.')
+        print(f'\nComparing {table_name} dataframes.')  
         print('\tPerforming initial checks.')
+        
+        logging.info('\n\n--------------------------------------------------------------------\n\n')
         logging.info(f'Comparing {table_name} dataframes.')
         
         df1 = dataframe_tuple[0]
@@ -253,82 +267,60 @@ def main():
                 with pd.ExcelWriter(excel_filename,mode='w') as writer:
                     si[1].to_excel(writer, sheet_name=f'{table_name}_0')
                     si[2].to_excel(writer, sheet_name=f'{table_name}_1')
-            
-            
             continue
+        
         else:
             logging.info('\tPASS.')
         
-        # Now use DataFrame.compare()
+        # Prep DataFrames to later use DataFrame.compare()
         print('\tInitial checks passed.')
         print('\tPreparing dataframes for df.compare()...')
+        tc1 = time.time()
+        
         df1_ = prep_for_compare(df1, keys)
         df2_ = prep_for_compare(df2, keys)
+        
+        tc2 = time.time()
+        mins = round((tc2-tc1)/60,1)
+        logging.info(f'\tPrepping dataframes for compare took {mins} minutes.')
+        print(f'\tPrepping dataframes for compare took {mins} minutes.')
+        
+        # Use DataFrame.compare()
         print('\tComparing dataframes...')
         if df1_.equals(df2_): 
             print(f'{table_name} dataframes are the same.')
-            logging.info(f'{table_name} dataframes are the same.')
+            logging.info(f'\t{table_name} dataframes are the same.')
         else: 
-            diff = df1_.compare(df2_)
-            excel_filename = os.path.join(OUTPUT_LOCATION, f'{table_name}.xlsx')
+            tc3 = time.time()
             
+            diff = df1_.compare(df2_)
+            
+            tc4 = time.time()
+            mins = round((tc4-tc3)/60,1)
+            logging.info(f'\tComparing dataframes took {mins} minutes. {df1_.shape} rows, cols.')
+            print(f'\tComparing dataframes took {mins} minutes. {df1_.shape} rows, cols.') 
+            
+            tc5 = time.time()
+            print('\tExporting comparison to Excel...')
+            excel_filename = os.path.join(OUTPUT_LOCATION, f'{table_name}.xlsx')
             with pd.ExcelWriter(excel_filename,mode='w') as writer:
                     diff.to_excel(writer)
             
-            comparison_dict[table_name] = diff
+            tc6 = time.time()
+            mins = round((tc6-tc5)/60,1)
+            logging.info(f'\tExporting comparison to Excel took {mins} minutes. {diff.shape} rows, cols.')
+            print(f'\tExporting comparison to Excel took {mins} minutes. {diff.shape} rows, cols.') 
             
-        logging.info('\n\n-----------------------------------------------------------------------\n\n')
+            comparison_dict[table_name] = diff
+  
         print('\tDone.\n')
         
     return comparison_dict
 
 
-#%%  Test main()
-
+#%%  Run comparison function.
 
 res = main()
 
-
-
-
-
-
-
-
-#%% Export Dataframe to Excel examples.
-
-# Create summy data
-df1 = pd.DataFrame(
-    {
-        "col1": ["a", "a", "b", "b", "a"],
-        "col2": ['', 2.0, 3.0, 1, 5.0],
-        "col3": [1.0, 2.0, 3.0, 4.0, 5.0]
-    }
-)
-df2 = pd.DataFrame(
-    {
-        "col1": ["a", "a", "b", "b", "a"],
-        "col2": [3, 2.0, 3.0, 4, 5.0],
-        "col3": [1.0, 2.0, 3.0, 4.0, 5.0]
-    }
-)
-
-paired_tables_test = {'table_name_1':(df1, df2),
-                      'table_name_2':(df1.replace({'a':'A'}), df1.replace({'b':'B'}))}
-
-# Do stuff
-for table_name, tables in paired_tables_test.items():
-    
-    df1 = tables[0]
-    df2 = tables[1]
-    
-    diff = df1.compare(df2)
-    
-    excel_filename = os.path.join(OUTPUT_LOCATION, COMPARE_FILENAME, table_name)
-    if os.path.exists(excel_filename):
-        with pd.ExcelWriter(excel_filename,mode='a') as writer:
-            diff.to_excel(writer, sheet_name=f'{table_name}')
-    else:
-        with pd.ExcelWriter(excel_filename,mode='w') as writer:
-            diff.to_excel(writer, sheet_name=f'{table_name}')
-
+t1=time.time()
+print(f'\nDone. Took {round((t1-t0)/60)} minutes to run.')
