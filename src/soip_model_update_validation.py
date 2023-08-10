@@ -7,7 +7,7 @@
 USER_NAME = 'graham.billey'
 APP_KEY = 'op_NWQ3YjQ0NjktNTBjOC00M2JkLWE4NWEtNjM1NDBmODA5ODEw'
 databases = ['PECO 2023-08 SOIP Opt copy 1',
-             'PECO 2023-08 SOIP Opt copy 2']
+             'PECO 2023-08 SOIP Opt copy 3']
 # NOTE: Currently the code isn o
 
 tables_we_want  = ['customerfulfillmentpolicies',
@@ -45,7 +45,7 @@ if not os.path.exists(OUTPUT_LOCATION):
 
 # Names of output validation files.
 DUP_INDEX_FILENAME = 'duplicate_primary_keys.xlsx'
-COMPARE_FILENAME = 'dataframe_comparisons.xlsx'
+#COMPARE_FILENAME = 'dataframe_comparisons.xlsx'
   
 # Logging
 logging.basicConfig(filename=os.path.join(OUTPUT_FOLDER, TODAY, 'output.log'), level=logging.DEBUG)
@@ -204,13 +204,12 @@ def prep_for_compare(df, keys):
     return df
 
 
-
-
 def main():
     comparison_dict = {}
     
     for table_name, dataframe_tuple in paired_tables.items():
         print(f'Comparing {table_name} dataframes.')
+        print('\tPerforming initial checks.')
         logging.info(f'Comparing {table_name} dataframes.')
         
         df1 = dataframe_tuple[0]
@@ -224,6 +223,8 @@ def main():
             logging.info(f'\tdf1 contains : {cn[1]}')
             logging.info(f'\tdf2 contains : {cn[2]}')
             continue
+        else:
+            logging.info('\tPASS.')
         
         # Check for different row counts.
         print('\t\tChecking row_counts...')
@@ -232,23 +233,31 @@ def main():
             logging.info('\tDifferent row counts were found.')
             logging.info(f'\tdf1 has {len(df1)} rows, df2 has {len(df2)} rows.')
             continue
+        else:
+            logging.info('\tPASS.')
         
         # Check for different indexes based on the primary key of each table.
         print('\t\tChecking same_index...')
         keys = primary_keys[table_name]
         si = same_index(df1, df2, keys)
-        if si[0]:   # If there are different primary keys.     
+        if si[0]:   # If there are different primary keys.  
+        
             logging.info('\tDifferent values for primary keys were found.')
-            # Save dataframes as Excel files. 
-            
-            # NEED TO GET THSI TO WORK
-            #with pd.ExcelWriter(os.path.join(OUTPUT_LOCATION, DUP_INDEX_FILENAME),
-            #                    mode='a') as writer:
-            #    si[1].to_excel(writer, sheet_name=f'{table_name}_0')
-            #    si[2].to_excel(writer, sheet_name=f'{table_name}_1')
+            # Save dataframes as Excel files.                
+            excel_filename = os.path.join(OUTPUT_LOCATION, DUP_INDEX_FILENAME)
+            if os.path.exists(excel_filename):
+                with pd.ExcelWriter(excel_filename,mode='a') as writer:
+                    si[1].to_excel(writer, sheet_name=f'{table_name}_0')
+                    si[2].to_excel(writer, sheet_name=f'{table_name}_1')
+            else:
+                with pd.ExcelWriter(excel_filename,mode='w') as writer:
+                    si[1].to_excel(writer, sheet_name=f'{table_name}_0')
+                    si[2].to_excel(writer, sheet_name=f'{table_name}_1')
             
             
             continue
+        else:
+            logging.info('\tPASS.')
         
         # Now use DataFrame.compare()
         print('\tInitial checks passed.')
@@ -258,13 +267,13 @@ def main():
         print('\tComparing dataframes...')
         if df1_.equals(df2_): 
             print(f'{table_name} dataframes are the same.')
+            logging.info(f'{table_name} dataframes are the same.')
         else: 
             diff = df1_.compare(df2_)
+            excel_filename = os.path.join(OUTPUT_LOCATION, f'{table_name}.xlsx')
             
-            # NEED TO GET THSI TO WORK
-            #with pd.ExcelWriter(os.path.join(OUTPUT_LOCATION, COMPARE_FILENAME),
-            #                    mode='a') as writer:
-            #    diff.to_excel(writer, sheet_name=f'{table_name}')
+            with pd.ExcelWriter(excel_filename,mode='w') as writer:
+                    diff.to_excel(writer)
             
             comparison_dict[table_name] = diff
             
@@ -272,10 +281,10 @@ def main():
         print('\tDone.\n')
         
     return comparison_dict
-        
 
 
 #%%  Test main()
+
 
 res = main()
 
@@ -286,106 +295,40 @@ res = main()
 
 
 
-#%% DataFrame.compare() examples.
+#%% Export Dataframe to Excel examples.
 
+# Create summy data
+df1 = pd.DataFrame(
+    {
+        "col1": ["a", "a", "b", "b", "a"],
+        "col2": ['', 2.0, 3.0, 1, 5.0],
+        "col3": [1.0, 2.0, 3.0, 4.0, 5.0]
+    }
+)
+df2 = pd.DataFrame(
+    {
+        "col1": ["a", "a", "b", "b", "a"],
+        "col2": [3, 2.0, 3.0, 4, 5.0],
+        "col3": [1.0, 2.0, 3.0, 4.0, 5.0]
+    }
+)
 
+paired_tables_test = {'table_name_1':(df1, df2),
+                      'table_name_2':(df1.replace({'a':'A'}), df1.replace({'b':'B'}))}
 
-
-
-
-
-#%% Misc Testing
-
-
-# Why will the column 'returnqty' not convert to float? Some rows must contain a 
-# string that can't be converted.
-# Found it - one row contained the empty string ''.
+# Do stuff
+for table_name, tables in paired_tables_test.items():
     
-# =============================================================================
-# t2 = convert_numeric_cols(df1_).compare(convert_numeric_cols(df2_))
-# =============================================================================
-
-# =============================================================================
-# r = 'R_CANE1E3Y9_70599'
-# r_ =df1_.loc[r]
-# =============================================================================
-
-
-# =============================================================================
-# rows = []
-# for row in df1_.index:
-#     val = df1_.loc[row, 'returnqty']
-#     if val is not None:
-#         try:
-#             float(df1_.loc[row, 'returnqty'])
-#         except:
-#             #print(row)
-#             rows.append(row)
-# 
-# 
-# df1_.loc[rows[0], 'returnqty']
-# 
-# df_test = pd.DataFrame(
-#     {
-#         "col1": ["a", "a", "b", "b", "a"],
-#         "col2": ['', 2.0, 3.0, np.nan, 5.0],
-#         "col3": [1.0, 2.0, 3.0, 4.0, 5.0]
-#     },
-#     columns=["col1", "col2", "col3"],
-# )
-# 
-# df_test_ = df_test.replace({'':None})
-# =============================================================================
-
-
-
-# =============================================================================
-# DataFrame.compare() examples.
-# df1 = pd.DataFrame(
-#     {
-#         "col1": ["a", "a", "b", "b", "a"],
-#         "col2": [1.0, 2.0, 3.0, np.nan, 5.0],
-#         "col3": [1.0, 2.0, 3.0, 4.0, 5.0]
-#     },
-#     columns=["col1", "col2", "col3"],
-# )
-# 
-# df2 = df1.copy()
-# df2.loc[0, 'col1'] = 'c'
-# df2.loc[2, 'col3'] = 4.0
-# 
-# res_1_2 = df1.compare(df2, result_names=('df1', 'df2'), align_axis=1, keep_equal=False)
-# 
-# 
-# df3 = pd.DataFrame(
-#     {
-#         "col1": ["a", "a", "b", "b", "a"],
-#         "col2": [2.0, 1.0, 3.0, np.nan, 5.0],
-#         "col3": [2.0, 1.0, 3.0, 4.0, 5.0]
-#     },
-#     columns=["col1", "col2", "col3"],
-# )
-# 
-# res_1_3 = df1.compare(df3, result_names=('df1', 'df2'), align_axis=1, keep_equal=False)
-# 
-# df1_s = df1.sort_values(list(df1.columns)).reset_index(drop=True)
-# df3_s = df3.sort_values(list(df3.columns)).reset_index(drop=True)
-# res_1_3_sorted = df1_s.compare(df3_s, result_names=('df1', 'df2'), align_axis=1, keep_equal=False)  # Works
-# 
-# 
-# df1_s_i = df1.sort_values(list(df1.columns), ignore_index=True)
-# df3_s_i = df3.sort_values(list(df3.columns), ignore_index=True)
-# res_1i_3i_sorted = df1_s_i.compare(df3_s_i, result_names=('df1', 'df2'), align_axis=1, keep_equal=False)  # Works
-# 
-# 
-# 
-# p1 = cf_data['PECO 2023-08 SOIP Opt copy 1']['periods']
-# p2 = cf_data['PECO 2023-08 SOIP Opt copy 2']['periods'] # Should be the same
-# delta = p1.compare(p2) # Pass. Returns an empty DataFrame.
-# =============================================================================
-
-
-
-
-
+    df1 = tables[0]
+    df2 = tables[1]
+    
+    diff = df1.compare(df2)
+    
+    excel_filename = os.path.join(OUTPUT_LOCATION, COMPARE_FILENAME, table_name)
+    if os.path.exists(excel_filename):
+        with pd.ExcelWriter(excel_filename,mode='a') as writer:
+            diff.to_excel(writer, sheet_name=f'{table_name}')
+    else:
+        with pd.ExcelWriter(excel_filename,mode='w') as writer:
+            diff.to_excel(writer, sheet_name=f'{table_name}')
 

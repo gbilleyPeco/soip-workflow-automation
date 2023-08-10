@@ -141,7 +141,7 @@ if error_count > 0:
 print("\nAdding SCAC codes to transportation SQL statements...")
 trans_load_counts_sql = scac_sql_preprocessing(trans_load_counts_sql_raw, excel_data['SCAC Types'])
 trans_costs_sql = scac_sql_preprocessing(trans_costs_sql_raw, excel_data['SCAC Types'])
-print("\tDone!")
+print("\tDone.")
 
 sql_name_dict = {'tbl_tab_Location':tbl_tab_Location_sql,
                  'nbr_of_depots':nbr_of_depots_sql,

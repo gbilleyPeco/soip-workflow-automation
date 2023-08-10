@@ -6,12 +6,12 @@
 # Cosmic Frog Account Data.
 USER_NAME = 'graham.billey'
 APP_KEY = 'op_NWQ3YjQ0NjktNTBjOC00M2JkLWE4NWEtNjM1NDBmODA5ODEw'
-INUPT_DB_NAME = 'PECO 2023-08 SOIP Opt copy 1' # Opt Model Name
+INPUT_DB_NAME = 'PECO 2023-08 SOIP Opt copy 1' # Opt Model Name
 OUTPUT_DB_NAME = 'PECO 2023-08 SOIP Opt copy 3' # Opt Model Name
 
 # SOIP Excel File Information
-SOIP_DEPOT_ASSIGNMENTS_FILENAME = 'SOIP - Depot Assignments - TESTING.xlsx'
-SOIP_OPT_ASSUMPTIONS_FILENAME = 'SOIP Optimization Assumptions - TESTING.xlsx'
+SOIP_DEPOT_ASSIGNMENTS_FILENAME = 'SOIP - Depot Assignments - July.xlsx'
+SOIP_OPT_ASSUMPTIONS_FILENAME = 'SOIP Optimization Assumptions - 20230620.xlsx'
 SCAC_CARRIER_TYPE_FILENAME = 'SCAC to Carrier Type.xlsx'
 TRANS_RFQ_RATES_FILENAME = 'Trans RFQ Rates.xlsx'
 
