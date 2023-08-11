@@ -174,8 +174,8 @@ def same_index(df1, df2, keys):
         
     i1_not_i2 = merged[merged['_merge']=='left_only']
     i2_not_i1 = merged[merged['_merge']=='right_only']
-    diff_count = len(i1_not_i2) + len(i2_not_i1)
-    return diff_count, i1_not_i2, i2_not_i1
+    diff_index_count = len(i1_not_i2) + len(i2_not_i1)
+    return diff_index_count, i1_not_i2, i2_not_i1
 
 # Prep the dataframe for comparison
 def prep_for_compare(df, keys):
@@ -220,6 +220,12 @@ def main():
     comparison_dict = {}
     
     for table_name, dataframe_tuple in paired_tables.items():
+        
+        ##### THIS SECTION HERE ONLY FOR TESTING #####
+        if table_name not in ['replenishmentpolicies']:
+            continue
+        ##### THIS SECTION HERE ONLY FOR TESTING #####
+        
         print(f'\nComparing {table_name} dataframes.')  
         print('\tPerforming initial checks.')
         
@@ -253,21 +259,20 @@ def main():
         # Check for different indexes based on the primary key of each table.
         print('\t\tChecking same_index...')
         keys = primary_keys[table_name]
-        si = same_index(df1, df2, keys)
-        if si[0]:   # If there are different primary keys.  
+        diff_index_count, df1_only, df2_only = same_index(df1, df2, keys)
+        if diff_index_count:   # If there are different primary keys.  
         
             logging.info('\tDifferent values for primary keys were found.')
             # Save dataframes as Excel files.                
             excel_filename = os.path.join(OUTPUT_LOCATION, DUP_INDEX_FILENAME)
             if os.path.exists(excel_filename):
-                with pd.ExcelWriter(excel_filename,mode='a') as writer:
-                    si[1].to_excel(writer, sheet_name=f'{table_name}_0')
-                    si[2].to_excel(writer, sheet_name=f'{table_name}_1')
+                with pd.ExcelWriter(excel_filename,mode='a', if_sheet_exists='replace') as writer:
+                    df1_only.to_excel(writer, sheet_name=f'{table_name}_0')
+                    df2_only.to_excel(writer, sheet_name=f'{table_name}_1')
             else:
                 with pd.ExcelWriter(excel_filename,mode='w') as writer:
-                    si[1].to_excel(writer, sheet_name=f'{table_name}_0')
-                    si[2].to_excel(writer, sheet_name=f'{table_name}_1')
-            continue
+                    df1_only.to_excel(writer, sheet_name=f'{table_name}_0')
+                    df2_only.to_excel(writer, sheet_name=f'{table_name}_1')
         
         else:
             logging.info('\tPASS.')
@@ -292,7 +297,11 @@ def main():
             logging.info(f'\t{table_name} dataframes are the same.')
         else: 
             tc3 = time.time()
-            
+            # Drop rows in df1_ and df2_ that have primary keys unique to that dataframe. 
+            # Keys must be equal to use df.compare().
+            # The keys that are unique to each dataframe are saved in the 'duplicate_primary_keys.xlsx' file.
+            df1_ = df1_.drop(df1_only.set_index(keys).index)
+            df2_ = df2_.drop(df2_only.set_index(keys).index)
             diff = df1_.compare(df2_)
             
             tc4 = time.time()
@@ -321,6 +330,228 @@ def main():
 #%%  Run comparison function.
 
 res = main()
-
 t1=time.time()
 print(f'\nDone. Took {round((t1-t0)/60)} minutes to run.')
+
+#%% Test D\dropping rows with unique primary keys on both dataframes, then compare.
+
+# =============================================================================
+# def main_test():
+#     comparison_dict = {}
+#     
+#     for table_name, dataframe_tuple in paired_tables.items():
+#         
+#         ##### THIS SECTION HERE ONLY FOR TESTING #####
+#         if table_name not in ['groups', 'replenishmentpolicies']:
+#             continue
+#         ##### THIS SECTION HERE ONLY FOR TESTING #####
+#         
+#         print(f'\nComparing {table_name} dataframes.')  
+#         print('\tPerforming initial checks.')
+#         
+#         df1 = dataframe_tuple[0]
+#         df2 = dataframe_tuple[1]
+# 
+#         # Check for different column names.
+#         print('\t\tChecking col_names...')
+#         cn = col_names(df1, df2)
+#         if cn[0]:   # If there are different column names.
+#             continue
+#         
+#         # Check for different row counts.
+#         print('\t\tChecking row_counts...')
+#         rc = row_counts(df1, df2)
+#         if rc:     # If there are different row counts
+#             continue
+#         
+#         # Check for different indexes based on the primary key of each table.
+#         print('\t\tChecking same_index...')
+#         keys = primary_keys[table_name]
+#         diff_index_count, df1_only, df2_only = same_index(df1, df2, keys)
+#         if diff_index_count:   # If there are different primary keys.  
+#             # Save dataframes as Excel files.                
+#             excel_filename = os.path.join(OUTPUT_LOCATION, DUP_INDEX_FILENAME)
+#             if os.path.exists(excel_filename):
+#                 with pd.ExcelWriter(excel_filename,mode='a', if_sheet_exists='replace') as writer:
+#                     df1_only.to_excel(writer, sheet_name=f'{table_name}_0')
+#                     df2_only.to_excel(writer, sheet_name=f'{table_name}_1')
+#             else:
+#                 with pd.ExcelWriter(excel_filename,mode='w') as writer:
+#                     df1_only.to_excel(writer, sheet_name=f'{table_name}_0')
+#                     df2_only.to_excel(writer, sheet_name=f'{table_name}_1')
+#         
+#         # Prep DataFrames to later use DataFrame.compare()
+#         print('\tPreparing dataframes for df.compare()...')
+#         df1_ = prep_for_compare(df1, keys)
+#         df2_ = prep_for_compare(df2, keys)
+# 
+#         # Use DataFrame.compare()
+#         print('\tComparing dataframes...')
+#         if df1_.equals(df2_): 
+#             print(f'{table_name} dataframes are the same.')
+# 
+#         else: 
+#             # Drop rows in df1_ and df2_ that have primary keys unique to that dataframe. 
+#             # Keys must be equal to use df.compare().
+#             # The keys that are unique to each dataframe are saved in the 'duplicate_primary_keys.xlsx' file.
+#             df1_ = df1_.drop(df1_only.set_index(keys).index)
+#             df2_ = df2_.drop(df2_only.set_index(keys).index)
+#             diff = df1_.compare(df2_)
+# 
+#             diff = df1_.compare(df2_)
+#             
+#             print('\tExporting comparison to Excel...')
+#             excel_filename = os.path.join(OUTPUT_LOCATION, f'{table_name}.xlsx')
+#             with pd.ExcelWriter(excel_filename,mode='w') as writer:
+#                     diff.to_excel(writer)
+#                         
+#             comparison_dict[table_name] = diff
+#   
+#         print('\tDone.\n')
+#         
+#     return comparison_dict
+# 
+# res = main_test()
+# =============================================================================
+
+
+
+
+def same_index_test(df1, df2, keys):
+# =============================================================================
+# In order to use DataFrame.compare(), the indexes of both dataframes have to be the same. 
+# To implement DataFrame.compare(), we set the index to be the primary keys of each dataframe.
+# The purpose of this function is to check if the indexes of both dataframes are the same, and to 
+# output the differences (if any) as DataFrames for comparison.
+# 
+# After testing, we found instances in inventoryconstraints and productionconstraints where
+# index columns were numeric in nature, but sometimes stored with or without a decimal. (See the 
+# notes for prep_for_compare()). We need to apply the same conversions to the 
+# dataframes in this function. 
+# 
+# After testing, we found instances in replenishmentpolicies where rows with the same primary
+# key were duplicated, with different values in some columns. To compare the dataframes, we 
+# need to have identically-labelled dataframes, and these duplicated rows prevent the dataframes
+# from having the same index, even after dropping rows where the keys are unique to one dataframe.
+# 
+# This function therefore needs to have the following outputs:
+#     diff_index_count : the number of indices in df1 not in df2, plus the number in df2 not in df1.
+#                        This is just used as a simple check.
+#     df1_only         : The indices only in df1, and not in df2
+#     df2_only         : The indices only in df2, and not in df1
+#     df1_dups         : The subset of df1 containing all rows with duplicated indices
+#     df2_dups         : The subset of df2 containing all rows with duplicated indices
+#     df1_no_dups      : The subset of df1 without any of the rows in df1_dups
+#     df2_no_dups      : The subset of df2 without any of the rows in df1_dups
+# =============================================================================
+    
+    df1 = prep_for_compare(df1, keys).reset_index()
+    df2 = prep_for_compare(df2, keys).reset_index()
+    
+    with warnings.catch_warnings():
+        # NOTE: This is meant to suppress the following warning. 
+        # FutureWarning: In a future version, the Index constructor will not infer numeric dtypes 
+        # when passed object-dtype sequences (matching Series behavior)
+        warnings.simplefilter(action='ignore', category=FutureWarning)        
+        merged = df1[keys].merge(df2[keys], how='outer', indicator=True)
+        
+    df1_only = merged[merged['_merge']=='left_only']
+    df2_only = merged[merged['_merge']=='right_only']
+    diff_index_count = len(df1_only) + len(df2_only)
+    
+    return diff_index_count, df1_only, df2_only
+
+
+#################################### Inside of Main()
+table_name = 'replenishmentpolicies'
+dataframe_tuple = paired_tables[table_name]
+df1 = dataframe_tuple[0]
+df2 = dataframe_tuple[1]
+
+# Check for different indexes based on the primary key of each table.
+keys = primary_keys[table_name]
+#diff_index_count, df1_only, df2_only = same_index_test(df1, df2, keys)
+
+########### same_index_test ###########
+df1_a = prep_for_compare(df1, keys)
+df2_a = prep_for_compare(df2, keys)
+
+
+df1_dups    = df1_a[ df1_a.index.duplicated(keep=False)]
+df1_no_dups = df1_a[~df1_a.index.duplicated(keep=False)]
+
+df2_dups    = df2_a[ df2_a.index.duplicated(keep=False)]
+df2_no_dups = df2_a[~df2_a.index.duplicated(keep=False)]
+
+df1_a = df1_a.reset_index()
+
+
+with warnings.catch_warnings():
+    # NOTE: This is meant to suppress the following warning. 
+    # FutureWarning: In a future version, the Index constructor will not infer numeric dtypes 
+    # when passed object-dtype sequences (matching Series behavior)
+    warnings.simplefilter(action='ignore', category=FutureWarning)        
+    merged = df1_a[keys].merge(df2_a[keys], how='outer', indicator=True)
+    
+df1_only = merged[merged['_merge']=='left_only']
+df2_only = merged[merged['_merge']=='right_only']
+diff_index_count = len(df1_only) + len(df2_only)
+
+########### same_index_test ###########
+
+if diff_index_count:   # If there are different primary keys.  
+    # Save dataframes as Excel files.                
+    excel_filename = os.path.join(OUTPUT_LOCATION, DUP_INDEX_FILENAME)
+    if os.path.exists(excel_filename):
+        with pd.ExcelWriter(excel_filename,mode='a', if_sheet_exists='replace') as writer:
+            df1_only.to_excel(writer, sheet_name=f'{table_name}_0')
+            df2_only.to_excel(writer, sheet_name=f'{table_name}_1')
+    else:
+        with pd.ExcelWriter(excel_filename,mode='w') as writer:
+            df1_only.to_excel(writer, sheet_name=f'{table_name}_0')
+            df2_only.to_excel(writer, sheet_name=f'{table_name}_1')
+    
+
+# Prep DataFrames to later use DataFrame.compare()
+print('\tPreparing dataframes for df.compare()...')
+df1_ = prep_for_compare(df1, keys)
+df2_ = prep_for_compare(df2, keys)
+
+
+# Use DataFrame.compare()
+print('\tComparing dataframes...')
+if df1_.equals(df2_): 
+    print(f'{table_name} dataframes are the same.')
+
+else: 
+    # Drop rows in df1_ and df2_ that have primary keys unique to that dataframe. 
+    # Keys must be equal to use df.compare().
+    # The keys that are unique to each dataframe are saved in the 'duplicate_primary_keys.xlsx' file.
+    
+    # Why did this not result in two identically-labelled dataframes?
+    
+    df1_test = df1_.drop(df1_only.set_index(keys).index)
+    df2_test = df2_.drop(df2_only.set_index(keys).index)
+    diff = df1_test.compare(df2_test)
+    
+    
+    t1 = df1_test[df1_test.index.duplicated(keep=False)]
+    t2 = df2_test[df2_test.index.duplicated(keep=False)]
+    
+    
+    if diff.empty:
+        print('\tNo differences between dataframes after removing unique keys.')
+        logging.info('\tNo differences between dataframes after removing unique keys.')
+        
+    else:
+        print('\tExporting comparison to Excel...')
+        excel_filename = os.path.join(OUTPUT_LOCATION, f'{table_name}.xlsx')
+        with pd.ExcelWriter(excel_filename,mode='w') as writer:
+                diff.to_excel(writer)
+                    
+
+print('\tDone.\n')
+
+diff.empty
+
+
