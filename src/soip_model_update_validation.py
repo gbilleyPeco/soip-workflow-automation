@@ -321,16 +321,16 @@ def main():
         # If there are DUPLICATE primary keys WITHIN ONE dataset... Export to Excel for analysis.
         if len(df1_dups) + len(df2_dups):
             # Save dataframes as Excel files.  
-            logging.info('\Duplicate values for primary keys were found within a dataset.')              
+            logging.info('\tDuplicate values for primary keys were found within a dataset.')              
             excel_filename = os.path.join(OUTPUT_LOCATION, DUP_INDEX_FILENAME)
             if os.path.exists(excel_filename):
                 with pd.ExcelWriter(excel_filename,mode='a', if_sheet_exists='replace') as writer:
-                    df1_only.to_excel(writer, sheet_name=f'{table_name}_0')
-                    df2_only.to_excel(writer, sheet_name=f'{table_name}_1')
+                    df1_dups.to_excel(writer, sheet_name=f'{table_name}_0')
+                    df2_dups.to_excel(writer, sheet_name=f'{table_name}_1')
             else:
                 with pd.ExcelWriter(excel_filename,mode='w') as writer:
-                    df1_only.to_excel(writer, sheet_name=f'{table_name}_0')
-                    df2_only.to_excel(writer, sheet_name=f'{table_name}_1')
+                    df1_dups.to_excel(writer, sheet_name=f'{table_name}_0')
+                    df2_dups.to_excel(writer, sheet_name=f'{table_name}_1')
         else:
             logging.info('\tPASS.')
         
