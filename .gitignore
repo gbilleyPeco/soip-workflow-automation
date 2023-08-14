@@ -1,5 +1,5 @@
-/docs/*
+docs/*
 __pycache__
 validation/*
 !validation/.gitkeep
-data/old/.*
+data/old/*
