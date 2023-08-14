@@ -1,4 +1,4 @@
-docs/090*
+docs/*
 __pycache__
 validation/*
 !validation/.gitkeep
