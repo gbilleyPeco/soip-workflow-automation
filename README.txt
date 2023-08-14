@@ -64,6 +64,7 @@ soip-workflow-automation/
 	RUN MODEL.bat
 	user_inputs.py
 	.gitignore   	(This can be ignored by the user)
+	environment.yml (This can be ignored by the user)
 
 ---------------------------------------------------------------------------------------------------
 The "data" Folder
@@ -73,7 +74,27 @@ stored in PECO's data warehouse, and so has to be stored locally. There is also 
 where you can move old excel files from past model runs. That way you can keep the "data" folder
 less cluttered.
 
+SCAC to Carrier Type.xlsx
+	This file simply denotes various SCAC codes as CPU or Dedicated. All CPU and Dedicated 
+	SCAC codes should be included in this sheet, so if new carriers are used this sheet will need
+	to be updated manually.
 
+Trans RFQ Rates.xlsx
+	This file contains transportation request-for-quote rates, provided by the transportation team.
+
+SOIP - Depot Assignments - [Month].xlsx
+	This file is produced monthly as part of the SOIP process. 
+
+SOIP - Optimization Assumptions - [Month].xlsx
+	This file is produced monthly as part of the SOIP process. 
+---------------------------------------------------------------------------------------------------
+The "user_inputs.py" File
+
+To open the user_inputs.py file, you can either double-click or right-click and select "Open with" and 
+pick any text editor. 
+
+Here you can update any of the user-input parameters used by the model. If you make any changes, 
+press "ctrl+s" to save the file and close it.
 
 
 

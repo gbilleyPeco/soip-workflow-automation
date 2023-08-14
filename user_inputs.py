@@ -28,5 +28,5 @@ Avg_Load_Size_Issues = 521
 Avg_Load_Size_Returns = 487
 Avg_Load_Size_Transfers = 560
 Fuel_Surcharge = 0.51
-Duty_Rate_US_to_Canada = 7.3360291
-Duty_Rate_Canada_to_US = 0.5860291
+Duty_Rate_US_to_Canada = 5
+Duty_Rate_Canada_to_US = 5.6

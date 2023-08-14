@@ -18,8 +18,6 @@ This script is part of the monthly SOIP process. Specifically, this script downl
 data tables from a Cosmic Frog optimization model, updates values in those tables based on data in 
 a multiple local Excel workbooks and data pulled from PECO's data warehouse, then reuploads the 
 edited data tables back to the same Cosmic Frog optimization model.
-
-
 """
 
 # Imports
@@ -195,7 +193,7 @@ warehousingpolicies = cosmic_frog_data['warehousingpolicies'].copy()
 # # NOTE: We will change this during development and compare to the unedited dataframes. 
 # #       Remove this section after development is complete.
 # customerdemand_orig = cosmic_frog_data['customerdemand'].copy()
-customerfulfillmentpolicies_orig = cosmic_frog_data['customerfulfillmentpolicies'].copy()
+# customerfulfillmentpolicies_orig = cosmic_frog_data['customerfulfillmentpolicies'].copy()
 # customers_orig = cosmic_frog_data['customers'].copy()
 # facilities_orig = cosmic_frog_data['facilities'].copy()
 # groups_orig = cosmic_frog_data['groups'].copy()
@@ -204,7 +202,7 @@ customerfulfillmentpolicies_orig = cosmic_frog_data['customerfulfillmentpolicies
 # periods_orig = cosmic_frog_data['periods'].copy()
 # productionconstraints_orig = cosmic_frog_data['productionconstraints'].copy()
 # productionpolicies_orig = cosmic_frog_data['productionpolicies'].copy()
-replenishmentpolicies_orig = cosmic_frog_data['replenishmentpolicies'].copy()
+# replenishmentpolicies_orig = cosmic_frog_data['replenishmentpolicies'].copy()
 # transportationpolicies_orig = cosmic_frog_data['transportationpolicies'].copy()
 # warehousingpolicies_orig = cosmic_frog_data['warehousingpolicies'].copy()
 # =============================================================================
@@ -297,10 +295,9 @@ cfp['depottype'] = cfp['Type']
 # Set existing values prior to updating.
 cols = ['unitcost']
 customerfulfillmentpolicies[cols] = 0
-customerfulfillmentpolicies.set_index('sourcename')
+customerfulfillmentpolicies.set_index('sourcename', inplace=True)
 customerfulfillmentpolicies.update(cfp)
 customerfulfillmentpolicies.reset_index(inplace=True)
-
 
 ###################################################################### Facilities
 cols = ['ModelID', 'Type', 'Closed', 'Heat Treat', 'Fixed Upd']
@@ -425,18 +422,19 @@ productionpolicies.reset_index(inplace=True)
 
 ###################################################################### Replenishment Policies
 cols = ['ModelID', 'Type']
-loc = excel_data['Depot Assumptions'][cols].copy()
-loc.index = loc['ModelID']
+rps = excel_data['Depot Assumptions'][cols].copy()
+rps.index = rps['ModelID']
 
-loc['odepottype'] = loc['Type']
-replenishmentpolicies.index = replenishmentpolicies['sourcename']
-replenishmentpolicies.update(loc)
+rps['odepottype'] = rps['Type']
+replenishmentpolicies.set_index ('sourcename', inplace=True)
+replenishmentpolicies.update(rps)
+replenishmentpolicies.reset_index(inplace=True)
 
-del(loc['odepottype'])
-loc['ddepottype'] = loc['Type']
-replenishmentpolicies.set_index('facilityname')
-replenishmentpolicies.update(loc)
-
+del(rps['odepottype'])
+rps['ddepottype'] = rps['Type']
+replenishmentpolicies.set_index('facilityname', inplace=True)
+replenishmentpolicies.update(rps)
+replenishmentpolicies.reset_index(inplace=True)
 
 ###################################################################### Warehousing Policies
 cols = ['ModelID', 'Handling In Upd', 'Handling Out Upd', 'Sort Upd']
@@ -448,7 +446,7 @@ whp['outboundhandlingcost'] = whp['Handling Out Upd']
 # Set existing values prior to updating.
 cols = ['inboundhandlingcost', 'outboundhandlingcost']
 warehousingpolicies[cols] = 0
-warehousingpolicies.set_index('facilityname')
+warehousingpolicies.set_index('facilityname', inplace=True)
 warehousingpolicies.update(whp)
 warehousingpolicies.reset_index(inplace=True)
 print('\tDone.\n')
@@ -526,8 +524,6 @@ rps['soipplan'] = 'Y'
 rps['soip_depot_id'] = rps['RevisedDName']
 rps['status'] = 'Include'
 rps['notes']  = 'Baseline_Returns'
-
-#%% TESTING
 
 # Set existing values prior to updating.
 replenishmentpolicies['soipplan'] = 'N'
@@ -1183,8 +1179,6 @@ iss_locs.rename(columns={'customername':'membername'}, inplace=True)
 
 cols = ['membername', 'groupname', 'grouptype']
 grp = pd.concat([iss_locs[cols], ret_locs[cols]])
-#grp['status'] = 'ADDED'   # For testing only. Comment this out.
-#grp['notes'] = 'ADDED'    # For testing only. Comment this out.
 
 # Note: Can't use DataFrame.update for groups, as the primary keys of dataset are what is being 
 # updated. Need to make a new Groups dataframe.
