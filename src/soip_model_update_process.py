@@ -527,10 +527,12 @@ rps['soip_depot_id'] = rps['RevisedDName']
 rps['status'] = 'Include'
 rps['notes']  = 'Baseline_Returns'
 
+#%% TESTING
+
 # Set existing values prior to updating.
 replenishmentpolicies['soipplan'] = 'N'
-replenishmentpolicies['status'] = replenishmentpolicies.apply(lambda row: 'Exclude' if row['sourcename'][0] == 'R' else row['status'], axis=1)
-replenishmentpolicies['notes']  = replenishmentpolicies.apply(lambda row: 'NewAllToAll_Returns' if row['sourcename'][0] == 'R' else row['notes'], axis=1)
+replenishmentpolicies.loc[replenishmentpolicies['sourcename'].str.startswith('R'), 'status'] = 'Exclude'
+replenishmentpolicies.loc[replenishmentpolicies['sourcename'].str.startswith('R'), 'notes'] = 'NewAllToAll_Returns'
 
 index_cols = ['sourcename', 'facilityname']
 rps.set_index(index_cols, inplace=True)
@@ -751,7 +753,6 @@ rps = rps[~rps.index.duplicated()]
 replenishmentpolicies.set_index(index_cols, inplace=True)
 replenishmentpolicies.update(rps)
 replenishmentpolicies.reset_index(inplace=True)
-
 
 ###################################################################### Transportation Policies
 cols = ['originname', 'destinationname']
@@ -1227,7 +1228,7 @@ cols = ['facilityname', 'sourcename', 'odepottype', 'ddepottype', 'status']
 rps = replenishmentpolicies[cols].copy()
 
 transfers = rps[rps['sourcename'].str.startswith('D') & rps['facilityname'].str.startswith('D')].index
-rps.drop(transfers, inplace=True)
+rps.drop(~transfers, inplace=True)
 
 rps['status'] = 'Include'
 
@@ -1273,6 +1274,13 @@ replenishmentpolicies.set_index(index_cols, inplace=True)
 replenishmentpolicies.update(rps)
 replenishmentpolicies.reset_index(inplace=True)
 print('\tDone.\n')
+
+# =============================================================================
+t = replenishmentpolicies.copy()
+t[t['sourcename'].str.startswith('R') & (t['status']=='Include')]
+# =============================================================================
+
+
 
 #%% Renter Distributor Sort Preferred Depot (Alteryx worklfow 110)
 print('Executing : Renter Distributor Sort Preferred Depot (Alteryx worklfow 110)...')
