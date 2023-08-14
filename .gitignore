@@ -3,3 +3,4 @@ __pycache__
 src/archived/*
 validation/*
 *.log
+data/old
