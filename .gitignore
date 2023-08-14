@@ -1,4 +1,4 @@
 docs/090*
 __pycache__
-validation/*
+/validation/*
 data/old/.*
