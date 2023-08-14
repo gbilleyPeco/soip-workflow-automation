@@ -1,4 +1,5 @@
 docs/090*
 __pycache__
-/validation/*
+validation/*
+!validation/.gitkeep
 data/old/.*
