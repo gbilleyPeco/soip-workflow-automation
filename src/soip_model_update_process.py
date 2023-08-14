@@ -1227,8 +1227,8 @@ print('Executing : Transfer Matrix Update (Alteryx workflow 100)...')
 cols = ['facilityname', 'sourcename', 'odepottype', 'ddepottype', 'status']
 rps = replenishmentpolicies[cols].copy()
 
-transfers = rps[rps['sourcename'].str.startswith('D') & rps['facilityname'].str.startswith('D')].index
-rps.drop(~transfers, inplace=True)
+# Keep only transfers.
+rps = rps[rps['sourcename'].str.startswith('D') & rps['facilityname'].str.startswith('D')].copy()
 
 rps['status'] = 'Include'
 
