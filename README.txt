@@ -9,6 +9,7 @@ the following tasks:
 	4. Alter the data that was downloaded from Cosmic Frog based on the data from PECO's data 
 	   warehouse and the Excel files.
 	5. Upload the new data to Cosmic Frog, replacing the old data.
+	6. Run a validation script to compare the changes between the old and new models.
 ---------------------------------------------------------------------------------------------------
 The simplest way to run this process is to double-click the batch file named "RUN MODEL.bat".
 A black terminal window will pop up and you will see the code executing. Print statements will

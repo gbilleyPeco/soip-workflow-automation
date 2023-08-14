@@ -3,10 +3,9 @@
 # SOIP Model Update Process.
 # =============================================================================
 
-# Cosmic Frog Account Data.
-USER_NAME = 'graham.billey'
-APP_KEY = 'op_NWQ3YjQ0NjktNTBjOC00M2JkLWE4NWEtNjM1NDBmODA5ODEw'
-INPUT_DB_NAME = 'PECO 2023-08 SOIP Opt copy 1' # Opt Model Name
+USER_NAME = 'graham.billey'     # Cosmic Frog Account Data
+APP_KEY = 'op_NWQ3YjQ0NjktNTBjOC00M2JkLWE4NWEtNjM1NDBmODA5ODEw'     # Cosmic Frog Account Data
+INPUT_DB_NAME = 'PECO 2023-08 SOIP Opt copy 1'  # Opt Model Name
 OUTPUT_DB_NAME = 'PECO 2023-08 SOIP Opt copy 3' # Opt Model Name
 
 # SOIP Excel File Information
@@ -29,5 +28,5 @@ Avg_Load_Size_Issues = 521
 Avg_Load_Size_Returns = 487
 Avg_Load_Size_Transfers = 560
 Fuel_Surcharge = 0.51
-Duty_Rate_US_to_Canada = 0.073360291
-Duty_Rate_Canada_to_US = 0.005860291
+Duty_Rate_US_to_Canada = 7.3360291
+Duty_Rate_Canada_to_US = 0.5860291

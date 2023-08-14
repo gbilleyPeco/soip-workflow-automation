@@ -342,7 +342,7 @@ def main():
         else: 
             tc3 = time.time()
             
-            diff = df1_both.compare(df2_both)
+            diff = df1_both.compare(df2_both, result_names=('old', 'new'))
             
             tc4 = time.time()
             mins = round((tc4-tc3)/60,1)

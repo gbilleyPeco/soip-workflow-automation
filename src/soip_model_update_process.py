@@ -195,7 +195,7 @@ warehousingpolicies = cosmic_frog_data['warehousingpolicies'].copy()
 # # NOTE: We will change this during development and compare to the unedited dataframes. 
 # #       Remove this section after development is complete.
 # customerdemand_orig = cosmic_frog_data['customerdemand'].copy()
-# customerfulfillmentpolicies_orig = cosmic_frog_data['customerfulfillmentpolicies'].copy()
+customerfulfillmentpolicies_orig = cosmic_frog_data['customerfulfillmentpolicies'].copy()
 # customers_orig = cosmic_frog_data['customers'].copy()
 # facilities_orig = cosmic_frog_data['facilities'].copy()
 # groups_orig = cosmic_frog_data['groups'].copy()
@@ -204,7 +204,7 @@ warehousingpolicies = cosmic_frog_data['warehousingpolicies'].copy()
 # periods_orig = cosmic_frog_data['periods'].copy()
 # productionconstraints_orig = cosmic_frog_data['productionconstraints'].copy()
 # productionpolicies_orig = cosmic_frog_data['productionpolicies'].copy()
-# replenishmentpolicies_orig = cosmic_frog_data['replenishmentpolicies'].copy()
+replenishmentpolicies_orig = cosmic_frog_data['replenishmentpolicies'].copy()
 # transportationpolicies_orig = cosmic_frog_data['transportationpolicies'].copy()
 # warehousingpolicies_orig = cosmic_frog_data['warehousingpolicies'].copy()
 # =============================================================================
@@ -604,7 +604,7 @@ print('Executing : Lane Attributes (Alteryx workflow 020)...')
 ###################################################################### Customer Fulfillment Policies
 cols = ['customername', 'sourcename', 'soipplan', 'distance', 'greenfieldcandidate', 'cpudedicated']
 cfp = customerfulfillmentpolicies[cols].copy()
-cfp['distance'] = cfp['distance'].astype(float)
+cfp['distance'] = cfp['distance'].astype(float).fillna(0)
 
 cols = ['customername', 'country', 'georegion', 'pecoregion', 'pecosubregion', 'zone']
 cus = customers[cols].copy().add_suffix('_cust')
@@ -637,13 +637,13 @@ cfp['opecoregion'] = cfp['pecoregion_depo']
 cfp['dpecoregion'] = cfp['pecoregion_cust']
 cfp['opecosubregion'] = cfp['pecosubregion_depo']
 cfp['dpecosubregion'] = cfp['pecosubregion_cust']
-cfp['mileageband'] = pd.cut(cfp['quantity'], bins, right=False, labels=labs)
+cfp['mileageband'] = pd.cut(cfp['distance'], bins, right=False, labels=labs)   # Should be based on 'distance' not 'quantity'
 cfp['monthly_avg'] = cfp['quantity']
-cfp['monthlypalletband'] = cfp.apply(lambda row: 'LT3500' if row['quantity']<=3500 else 'GT3500', axis=1)
+cfp['monthlypalletband'] = cfp.apply(lambda row: 'LT3500' if row['monthly_avg']<=3500 else 'GT3500', axis=1)
 
 cfp = cfp.merge(nod[['ModelID', 'number_of_depots']], how='left', left_on='customername', right_on='ModelID')
-cfp['number_of_depots_served'] = cfp['number_of_depots']
-cfp['nbrdepotsband'] = cfp.apply(lambda row: 'LT01' if row['number_of_depots'] <= 1 else 'GT01', axis=1)
+cfp['number_of_depots_served'] = cfp['number_of_depots'].fillna(0)
+cfp['nbrdepotsband'] = cfp.apply(lambda row: 'LT01' if row['number_of_depots_served'] <= 1 else 'GT01', axis=1)
 
 def add_to_model(row):
     if (row['soipplan'] == 'N' and 
@@ -680,7 +680,7 @@ customerfulfillmentpolicies.reset_index(inplace=True)
 
 cols = ['facilityname', 'productname', 'sourcename', 'soipplan', 'distance', 'greenfieldcandidate', 'cpudedicated']
 rps = replenishmentpolicies[cols].copy()
-rps['distance'] = rps['distance'].astype(float)
+rps['distance'] = rps['distance'].astype(float).fillna(0)
 
 cols = ['facilityname', 'country', 'depottype', 'georegion', 'pecoregion', 'pecosubregion', 'zone']
 org = facilities[cols].copy().add_suffix('_orig')
@@ -696,6 +696,7 @@ fst = fst.groupby('facilityname').mean()
 rps = rps.merge(org, how='left', left_on='sourcename', right_on='facilityname_orig')
 rps = rps.merge(dst, how='left', left_on='facilityname', right_on='facilityname_dest')
 rps = rps.merge(fst, how='left', left_on='sourcename', right_on='facilityname')
+rps['constraintvalue'].fillna(0, inplace=True)
 
 bins = [-np.inf,50,100,150,200,300,400,500,1000,1500,2000,np.inf]
 labs = ['LT0050','GT0050','GT0100','GT0150','GT0200','GT0300','GT0400','GT0500','GT1000','GT1500','GT2000']
@@ -710,13 +711,13 @@ rps['opecoregion'] = rps['pecoregion_orig']
 rps['dpecoregion'] = rps['pecoregion_dest']
 rps['opecosubregion'] = rps['pecosubregion_orig']
 rps['dpecosubregion'] = rps['pecosubregion_dest']
-rps['mileageband'] = pd.cut(rps['constraintvalue'], bins, right=False, labels=labs)
+rps['mileageband'] = pd.cut(rps['distance'], bins, right=False, labels=labs)
 rps['monthly_avg'] = rps['constraintvalue']
-rps['monthlypalletband'] = rps.apply(lambda row: 'LT3500' if row['constraintvalue']<=3500 else 'GT3500', axis=1)
+rps['monthlypalletband'] = rps.apply(lambda row: 'LT3500' if row['monthly_avg']<=3500 else 'GT3500', axis=1)
 
 rps = rps.merge(nod[['ModelID', 'number_of_depots']], how='left', left_on='sourcename', right_on='ModelID')
-rps['number_of_depots_served'] = rps['number_of_depots']
-rps['nbrdepotsband'] = rps.apply(lambda row: 'LT01' if row['number_of_depots'] <= 1 else 'GT01', axis=1)
+rps['number_of_depots_served'] = rps['number_of_depots'].fillna(0)
+rps['nbrdepotsband'] = rps.apply(lambda row: 'LT01' if row['number_of_depots_served'] <= 1 else 'GT01', axis=1)
 
 def add_to_model(row):
     if (row['sourcename'].startswith('R_') and
