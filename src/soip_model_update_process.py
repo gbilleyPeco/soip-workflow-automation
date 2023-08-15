@@ -439,7 +439,7 @@ replenishmentpolicies.reset_index(inplace=True)
 ###################################################################### Warehousing Policies
 cols = ['ModelID', 'Handling In Upd', 'Handling Out Upd', 'Sort Upd']
 whp = excel_data['Depot Assumptions'][cols].copy()
-whp.index = whp['ModelID']
+whp.set_index('ModelID', inplace=True)
 whp['inboundhandlingcost'] = whp['Handling In Upd'].fillna(0) + whp['Sort Upd'].fillna(0)
 whp['outboundhandlingcost'] = whp['Handling Out Upd']
 
@@ -450,7 +450,6 @@ warehousingpolicies.set_index('facilityname', inplace=True)
 warehousingpolicies.update(whp)
 warehousingpolicies.reset_index(inplace=True)
 print('\tDone.\n')
-
 
 #%% Set SOIP Solve Flag (Alteryx workflow 015)
 print('Executing : Set SOIP Solve Flag (Alteryx workflow 015)...')

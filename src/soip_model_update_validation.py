@@ -373,3 +373,22 @@ def main():
 res = main()
 t1=time.time()
 print(f'\nDone. Took {round((t1-t0)/60)} minutes to run.')
+
+#%% TESTING
+
+
+(w_old, w_new) = paired_tables['warehousingpolicies']
+
+
+
+w_old.compare(w_new)
+
+
+
+
+
+
+
+
+
+
