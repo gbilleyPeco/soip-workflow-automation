@@ -1268,13 +1268,6 @@ replenishmentpolicies.update(rps)
 replenishmentpolicies.reset_index(inplace=True)
 print('\tDone.\n')
 
-# =============================================================================
-t = replenishmentpolicies.copy()
-t[t['sourcename'].str.startswith('R') & (t['status']=='Include')]
-# =============================================================================
-
-
-
 #%% Renter Distributor Sort Preferred Depot (Alteryx worklfow 110)
 print('Executing : Renter Distributor Sort Preferred Depot (Alteryx worklfow 110)...')
 
@@ -1282,14 +1275,23 @@ print('Executing : Renter Distributor Sort Preferred Depot (Alteryx worklfow 110
 
 cols = ['Ocode', 'Dcode']
 rps = excel_data['RenterDistSort Preferred Depot'][cols]
-o_d = rps.rename(columns={'Ocode':'facilityname', 'Dcode':'sourcename'}).copy()
-d_o = rps.rename(columns={'Ocode':'sourcename', 'Dcode':'facilityname'}).copy()
+
+# Join to facilities and customers to get the model IDs.
+cols = ['facilityname', 'loccode']
+fac = facilities[cols].copy()
+
+rps = rps.merge(fac, how='left', left_on='Ocode', right_on='loccode')
+rps = rps.merge(fac, how='left', left_on='Dcode', right_on='loccode', suffixes=('_O', '_D'))
+
+keep = ['facilityname_O', 'facilityname_D']
+o_d = rps[keep].rename(columns={'facilityname_O':'facilityname', 'facilityname_D':'sourcename'}).copy()
+d_o = rps[keep].rename(columns={'facilityname_O':'sourcename', 'facilityname_D':'facilityname'}).copy()
 rps = pd.concat([o_d, d_o]).drop_duplicates()
 rps['rentdistsortprefassig'] = 'Y'
 
 replenishmentpolicies['rentdistsortprefassig'] = 'N'
 
-index_cols = ['facilityname', 'sourcename', 'rentdistsortprefassig']
+index_cols = ['facilityname', 'sourcename']
 rps.set_index(index_cols, inplace=True)
 replenishmentpolicies.set_index(index_cols, inplace=True)
 replenishmentpolicies.update(rps)
