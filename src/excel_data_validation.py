@@ -169,8 +169,7 @@ def pull_data_from_excel():
         'Depot Assignments':{'filename' : SOIP_DEPOT_ASSIGNMENTS_FILENAME,
                              'start_row' : 0,
                              'key_cols' : ['MoveType', 'Loc Code', 'Default Depot Code'],
-                             'loc_attributes' : [['Loc Code', 'Location Name'],
-                                                 ['Default Depot Code', 'Default Depot Name']],
+                             'loc_attributes' : [['Loc Code', 'Location Name']],
                              'nonempty_cols' : ['MoveType', 'Loc Code', 'Location Name', 'Default Depot Code',
                                                 'Default Depot Name'],
                              'allowed_vals' : None
