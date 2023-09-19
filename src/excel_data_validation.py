@@ -40,6 +40,7 @@ def check_for_duplicate_keys(filename, sheetname, df, key_cols):
     dups = df[df.duplicated(key_cols)][key_cols]
     if not dups.empty:
         print(f"Duplicate values found in '{filename}', '{sheetname}' tab.\n{dups}\n\n")
+        logging.info(f"Duplicate values found in '{filename}', '{sheetname}' tab.\n{dups}\n\n")
         error = 1
         
     return error
@@ -68,6 +69,7 @@ def check_for_one_to_one(filename, sheetname, df, loc_attributes):
             if not duplicates.empty:
                 error += 1
                 print(f"One-to-one rule broken. '{col}' values appear across multiple rows in:\n'{filename}', '{sheetname}' tab.\n{duplicates}\n\n")
+                logging.info(f"One-to-one rule broken. '{col}' values appear across multiple rows in:\n'{filename}', '{sheetname}' tab.\n{duplicates}\n\n")
    
     return error
 
@@ -85,6 +87,7 @@ def check_for_missing_values(filename, sheetname, df, nonempty_cols):
         if df[col].isna().any():
             error += 1
             print(f"Empty/NaN data found in:\n'{filename}', '{sheetname}' tab.\nColumn '{col}' contains empty or NaN rows.\n\n")
+            logging.info(f"Empty/NaN data found in:\n'{filename}', '{sheetname}' tab.\nColumn '{col}' contains empty or NaN rows.\n\n")
         
     return error
 
@@ -109,6 +112,7 @@ def check_for_only_allowed_values(filename, sheetname, df, allowed_vals):
         if len(disallowed_values) > 0:
             error += 1
             print(f"Values that are not allowed found in:\n'{filename}', '{sheetname}' tab.\nColumn '{col}'.\n{disallowed_values}\n\n")
+            logging.info(f"Values that are not allowed found in:\n'{filename}', '{sheetname}' tab.\nColumn '{col}'.\n{disallowed_values}\n\n")
 
     return error
 
