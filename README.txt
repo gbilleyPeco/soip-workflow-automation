@@ -11,6 +11,19 @@ Process - ###" that perform the following tasks:
 	5. Upload the new data to Cosmic Frog.
 	6. Run a validation script to compare the changes between the old and new models.
 ---------------------------------------------------------------------------------------------------
+Creating a monthly Opt model is a 2-step process. This code base constitutes step 2.
+
+The purpose of step 1 is to upload all NEW data to Cosmic Frog (i.e. new renters, distributors, 
+the new issues and returns forecasts, etc.)
+
+The purpose of step 2 is to update all of the data in Cosmic Frog (i.e. depot attributes, default
+depot assignments, optimization assumptions, new transportation rates, etc.)
+---------------------------------------------------------------------------------------------------
+This process is broken into 2 parts. 
+	1. Updating the model.
+	2. Validating the changes by comapring the differences between the old data and the new 
+	   data.
+
 The simplest way to run this process is to double-click the batch files named "01_MODEL_UPDATE.bat"
 and "02_MODEL_VALIDATION.bat". A black terminal window will pop up and you will see the code 
 executing. Print statements will tell you what is happening. When the program is finished running, 
