@@ -11,10 +11,11 @@ Process - ###" that perform the following tasks:
 	5. Upload the new data to Cosmic Frog.
 	6. Run a validation script to compare the changes between the old and new models.
 ---------------------------------------------------------------------------------------------------
-The simplest way to run this process is to double-click the batch file named "RUN MODEL.bat".
-A black terminal window will pop up and you will see the code executing. Print statements will
-tell you what is happening. When the program is finished running, you will see "Press any key 
-to continue..." At this point, the process is complete and you can close the window.
+The simplest way to run this process is to double-click the batch files named "01_MODEL_UPDATE.bat"
+and "02_MODEL_VALIDATION.bat". A black terminal window will pop up and you will see the code 
+executing. Print statements will tell you what is happening. When the program is finished running, 
+you will see "Press any key to continue..." At this point, the process is complete and you can 
+close the window. Do not run "02_MODEL_VALIDATION.bat" until "01_MODEL_UPDATE.bat" has finished.
 
 This method requires the following to be true:
 	1. The "user_inputs.py" file has been updated.
@@ -28,9 +29,10 @@ This method requires the following to be true:
 	5. The first line in the "RUN MODEL.bat" file references YOUR Anaconda install location.
 	   
 	   NOTE: To check this, right-click on "RUN MODEL.bat" and select "Edit".
-	   If the first line is "call C:\Users\gbilley\Anaconda3\condabin\activate.bat", then you
-	   need to change the path. 
-	   (Most likely, you just need to replace "gbilley" with your PECO username.)
+	   If you see "gbilley" in the first line, 
+		(i.e: "call C:\Users\gbilley\Anaconda3\condabin\activate.bat")
+	   then you need to change the path. 
+	   	(Most likely, you just need to replace "gbilley" with your PECO username.)
 ---------------------------------------------------------------------------------------------------
 Project Folder Structure
 
@@ -61,7 +63,8 @@ soip-workflow-automation/
 			  Cosmic Frog table that was altered.
 
 	README.txt
-	RUN MODEL.bat
+	01_MODEL_UPDATE.bat
+	02_MODEL_VALIDATION.bat
 	user_inputs.py
 	.gitignore   	(This can be ignored by the user)
 	environment.yml (This can be ignored by the user)
