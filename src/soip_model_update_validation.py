@@ -97,7 +97,7 @@ cf_data = {}
 for database in databases:
     cf_data[database] = pull_data_from_cosmic_frog(USER_NAME, APP_KEY, database, tables_we_want)
 
-###################################### BEGIN DATA COMPARISON  ######################################
+#%% DATA COMPARISON
 
 primary_keys = {'customerfulfillmentpolicies':['customername', 'productname', 'sourcename'],
                 'customers':['customername'],
