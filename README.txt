@@ -85,14 +85,14 @@ soip-workflow-automation/
 	user_inputs.py
 	.gitignore   	(This can be ignored by the user)
 	environment.yml (This can be ignored by the user)
-
 ---------------------------------------------------------------------------------------------------
 The "data" Folder
 
 This folder contains four Excel files with input data needed to run this program. This data is not 
-stored in PECO's data warehouse, and so has to be stored locally. There is also a folder called "old"
-where you can move old excel files from past model runs. That way you can keep the "data" folder
-less cluttered.
+stored in PECO's data warehouse, and so has to be stored locally. 
+
+There is also a folder called "old" where you can move old excel files from past model runs. That 
+way you can keep the "data" folder less cluttered.
 
 SCAC to Carrier Type.xlsx
 	This file simply denotes various SCAC codes as CPU or Dedicated. All CPU and Dedicated 
@@ -115,14 +115,3 @@ pick any text editor.
 
 Here you can update any of the user-input parameters used by the model. If you make any changes, 
 press "ctrl+s" to save the file and close it.
-
-
-
-
-
-
-
-
-
-
-
