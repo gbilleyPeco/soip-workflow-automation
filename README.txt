@@ -24,11 +24,15 @@ This process is broken into 2 parts.
 	2. Validating the changes by comapring the differences between the old data and the new 
 	   data.
 
-The simplest way to run this process is to double-click the batch files named "01_MODEL_UPDATE.bat"
-and "02_MODEL_VALIDATION.bat". A black terminal window will pop up and you will see the code 
-executing. Print statements will tell you what is happening. When the program is finished running, 
-you will see "Press any key to continue..." At this point, the process is complete and you can 
-close the window. Do not run "02_MODEL_VALIDATION.bat" until "01_MODEL_UPDATE.bat" has finished.
+The simplest way to run this process is to double-click the batch files, i.e:
+	01_MODEL_UPDATE.bat
+	02_MODEL_VALIDATION.bat 
+
+A black terminal window will pop up and you will see the code executing. Print statements will tell 
+you what is happening. When the program is finished running, you will see "Press any key to 
+continue..." At this point, the process is complete and you can close the window. 
+
+Do not run "02_MODEL_VALIDATION.bat" until "01_MODEL_UPDATE.bat" has finished.
 
 This method requires the following to be true:
 	1. The "user_inputs.py" file has been updated.
@@ -39,9 +43,9 @@ This method requires the following to be true:
 
 	3. You are connected to PECO's VPN.
 	4. You have Anaconda installed in your computer. (https://www.anaconda.com/download)
-	5. The first line in the "RUN MODEL.bat" file references YOUR Anaconda install location.
+	5. The first line in the batch files reference YOUR Anaconda install location.
 	   
-	   NOTE: To check this, right-click on "RUN MODEL.bat" and select "Edit".
+	   NOTE: To check this, right-click on the batch file and select "Edit".
 	   If you see "gbilley" in the first line, 
 		(i.e: "call C:\Users\gbilley\Anaconda3\condabin\activate.bat")
 	   then you need to change the path. 
