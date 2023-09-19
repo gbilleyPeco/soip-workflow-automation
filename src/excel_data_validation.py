@@ -8,6 +8,7 @@ import numpy as np
 import os
 import sys
 import logging
+from datetime import date
 
 # Add project root to PATH to allow for relative imports. 
 ROOT = os.path.abspath(os.path.join('..'))
