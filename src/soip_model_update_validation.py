@@ -52,7 +52,8 @@ DUP_INDEX_FILENAME = 'duplicate_primary_keys.xlsx'
 #COMPARE_FILENAME = 'dataframe_comparisons.xlsx'
   
 # Logging
-logging.basicConfig(filename=os.path.join(OUTPUT_FOLDER, TODAY, 'output.log'), level=logging.INFO)
+logging.basicConfig(filename=os.path.join(OUTPUT_FOLDER, TODAY, 'soip_model_update_validation.log'), level=logging.INFO)
+logging.getLogger("urllib3").setLevel(logging.INFO)
 
 ############################################# PULL DATA ############################################
 def pull_data_from_cosmic_frog(USER_NAME, APP_KEY, DB_NAME, tables_we_want):
