@@ -3,3 +3,5 @@ __pycache__
 validation/*
 !validation/.gitkeep
 data/old/*
+data/SOIP - Depot Assignments - October.xlsx
+data/SOIP Optimization Assumptions - 20230918.xlsx
