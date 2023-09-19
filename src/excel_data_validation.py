@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 import os
 import sys
+import logging
 
 # Add project root to PATH to allow for relative imports. 
 ROOT = os.path.abspath(os.path.join('..'))
@@ -17,6 +18,16 @@ if ROOT not in sys.path:
 from user_inputs import SOIP_DEPOT_ASSIGNMENTS_FILENAME, SOIP_OPT_ASSUMPTIONS_FILENAME, \
     SCAC_CARRIER_TYPE_FILENAME, TRANS_RFQ_RATES_FILENAME
 
+# Create output data directory.
+OUTPUT_FOLDER = os.path.join('..', 'validation')
+TODAY = pd.to_datetime(date.today()).strftime('%Y-%m-%d')
+OUTPUT_LOCATION = os.path.join(OUTPUT_FOLDER, TODAY)
+if not os.path.exists(OUTPUT_LOCATION):
+    os.mkdir(OUTPUT_LOCATION)
+    
+# Logging
+logging.basicConfig(filename=os.path.join(OUTPUT_LOCATION, 'excel_data_validation.log'), level=logging.INFO)
+logging.getLogger("urllib3").setLevel(logging.INFO)
 
 def check_for_duplicate_keys(filename, sheetname, df, key_cols):
 # =============================================================================
